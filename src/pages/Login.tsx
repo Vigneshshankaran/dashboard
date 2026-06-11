@@ -26,7 +26,7 @@ import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import CloudQueueIcon from '@mui/icons-material/CloudQueue';
 import PersonIcon from '@mui/icons-material/Person';
 import CloseIcon from '@mui/icons-material/Close';
-import { AuthService } from '../api';
+import { AuthService, BASE_URL } from '../api';
 
 interface LoginProps {
   onLoginSuccess: () => void;
@@ -101,10 +101,12 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         platform: 'web',
       });
 
-      if (res && res.access_token) {
-        localStorage.setItem('authToken', res.access_token);
-        if (res.refresh_token) {
-          localStorage.setItem('refreshToken', res.refresh_token);
+      // Backend may wrap the tokens in { data: ... }
+      const tokens = (res as any)?.data ?? res;
+      if (tokens && tokens.access_token) {
+        localStorage.setItem('authToken', tokens.access_token);
+        if (tokens.refresh_token) {
+          localStorage.setItem('refreshToken', tokens.refresh_token);
         }
         onLoginSuccess();
       } else {
@@ -163,10 +165,12 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         otp: otp.trim(),
       }, 'web');
 
-      if (res && res.access_token) {
-        localStorage.setItem('authToken', res.access_token);
-        if (res.refresh_token) {
-          localStorage.setItem('refreshToken', res.refresh_token);
+      // Backend may wrap the tokens in { data: ... }
+      const tokens = (res as any)?.data ?? res;
+      if (tokens && tokens.access_token) {
+        localStorage.setItem('authToken', tokens.access_token);
+        if (tokens.refresh_token) {
+          localStorage.setItem('refreshToken', tokens.refresh_token);
         }
         onLoginSuccess();
       } else {
@@ -241,9 +245,10 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  // Google Signin
+  // Google Signin — backend address comes from VITE_API_BASE_URL (.env),
+  // never hardcoded, so dev and production each hit the right server
   const handleGoogleLogin = () => {
-    window.location.href = 'https://project-ze144.vercel.app/api/v1/auth/login/google';
+    window.location.href = `${BASE_URL}/v1/auth/login/google`;
   };
 
   return (
@@ -324,10 +329,10 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               }}
             >
               <Typography variant="caption" sx={{ color: '#D45529', fontWeight: 700, letterSpacing: '0.5px' }}>
-                LIVE VITALS
+                FALL DETECTION
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                98% Active
+                Real-time alerts
               </Typography>
             </Box>
             <Box
@@ -341,10 +346,10 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               }}
             >
               <Typography variant="caption" sx={{ color: '#10B981', fontWeight: 700, letterSpacing: '0.5px' }}>
-                SYSTEM STATUS
+                HEALTH VITALS
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                Fully Calibrated
+                Device monitoring
               </Typography>
             </Box>
           </Box>
@@ -818,20 +823,6 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 }}
               >
                 Forgot Password?
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#6E625B' }}>
-                Need help?{' '}
-                <Box
-                  component="span"
-                  sx={{
-                    color: '#D45529',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    '&:hover': { textDecoration: 'underline' },
-                  }}
-                >
-                  Contact Support
-                </Box>
               </Typography>
             </Box>
           </Box>

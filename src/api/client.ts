@@ -9,7 +9,7 @@
  *
  * The `client` object below is just a shorthand for the 5 HTTP verbs.
  */
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || '';
+export const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || '';
 
 export class ApiError extends Error {
   status: number;
