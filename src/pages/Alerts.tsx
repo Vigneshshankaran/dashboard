@@ -361,7 +361,7 @@ export const Alerts: React.FC<AlertsProps> = ({ role }) => {
             }}
           >
             <Tab label="System Alerts" />
-            <Tab label="Alarm Events 73" />
+            <Tab label={`Alarm Events (${logs.length})`} />
           </Tabs>
         </Box>
 
@@ -479,7 +479,7 @@ export const Alerts: React.FC<AlertsProps> = ({ role }) => {
           </Box>
         )}
 
-        {/* SUBTAB 1: Alarm Events 73 */}
+        {/* SUBTAB 1: Alarm Events */}
         {activeSubTab === 1 && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* Filter controls panel */}
