@@ -43,6 +43,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import { useEffect } from 'react';
 import { AdminService, DeviceService, DeviceAssignmentService, DeviceStatusService } from '../api';
 import { DataState } from '../components/DataState';
+import { useFeedback } from '../components/FeedbackProvider';
 
 // Device item structure
 interface DeviceItem {
@@ -73,6 +74,7 @@ interface AssignmentItem {
 }
 
 export const Devices: React.FC = () => {
+  const { notify, confirm } = useFeedback();
   // Mock data of devices matching screenshot
   const [devices, setDevices] = useState<DeviceItem[]>([]);
 
@@ -267,12 +269,13 @@ export const Devices: React.FC = () => {
 
     DeviceService.registerDevice(payload)
       .then(() => {
+        notify('Device registered successfully.', 'success');
         fetchDevices();
         handleCloseRegisterDialog();
       })
       .catch((err) => {
         console.error('Failed to register device in API:', err);
-        alert(`Registration failed: ${err?.message || 'Unknown error from server'}`);
+        notify(`Registration failed: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 
@@ -287,26 +290,34 @@ export const Devices: React.FC = () => {
 
     DeviceAssignmentService.assignDevice(payload)
       .then(() => {
+        notify('Device assigned successfully.', 'success');
         fetchAssignments();
         setSelectedAssignDevice('');
         setSelectedAssignSenior('');
       })
       .catch((err) => {
         console.error('Failed to assign device in API:', err);
-        alert('Failed to assign device in API.');
+        notify(`Failed to assign device: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 
   // Revoke a device — one-way per the backend spec (there is no un-revoke)
-  const handleRevokeDevice = (id: string) => {
-    if (!window.confirm('Revoke this device? It will stop being able to send data. This cannot be undone.')) return;
+  const handleRevokeDevice = async (id: string) => {
+    const ok = await confirm({
+      title: 'Revoke this device?',
+      message: 'It will stop being able to send data. This cannot be undone.',
+      confirmText: 'Revoke',
+      danger: true,
+    });
+    if (!ok) return;
     DeviceService.revokeDevice(id)
       .then(() => {
+        notify('Device revoked.', 'success');
         fetchDevices();
       })
       .catch((err) => {
         console.error('Failed to revoke device in API:', err);
-        alert(`Revoke failed: ${err?.message || 'Unknown error from server'}`);
+        notify(`Revoke failed: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 
@@ -339,15 +350,21 @@ export const Devices: React.FC = () => {
   };
 
   // Unlink/Delete Assignment
-  const handleDeleteAssignment = (id: string) => {
-    if (!window.confirm('Unassign this device from its senior?')) return;
+  const handleDeleteAssignment = async (id: string) => {
+    const ok = await confirm({
+      title: 'Unassign this device?',
+      message: 'The device will be unlinked from its senior. You can assign it again later.',
+      confirmText: 'Unassign',
+    });
+    if (!ok) return;
     DeviceAssignmentService.unassignDevice(id, { assignmentId: id, reason: 'Unlinked by Admin' })
       .then(() => {
+        notify('Device unassigned.', 'success');
         fetchAssignments();
       })
       .catch((err) => {
         console.error('Failed to unassign device in API:', err);
-        alert(`Unassign failed: ${err?.message || 'Unknown error from server'}`);
+        notify(`Unassign failed: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 
@@ -428,7 +445,7 @@ export const Devices: React.FC = () => {
       .catch((err) => {
         setInactiveLoading(false);
         console.warn('Failed to load device statuses from API:', err);
-        alert(`Could not load device statuses: ${err?.message || 'Unknown error from server'}`);
+        notify(`Could not load device statuses: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 

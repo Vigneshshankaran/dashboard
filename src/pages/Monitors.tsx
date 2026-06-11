@@ -24,6 +24,7 @@ import LinkIcon from '@mui/icons-material/Link'; // Chain link icon for Assign M
 import LinkOffIcon from '@mui/icons-material/LinkOff'; // Revoke unlink icon
 import { AdminService, MonitorService } from '../api';
 import { DataState } from '../components/DataState';
+import { useFeedback } from '../components/FeedbackProvider';
 
 
 // Monitor assignment structure
@@ -38,6 +39,7 @@ interface MonitorAssignmentItem {
 }
 
 export const Monitors: React.FC = () => {
+  const { notify, confirm } = useFeedback();
   // Pre-populated monitor assignments matching screenshot
   const [assignments, setAssignments] = useState<MonitorAssignmentItem[]>([]);
 
@@ -130,14 +132,22 @@ export const Monitors: React.FC = () => {
   };
 
   // Revoke handler
-  const handleRevoke = (id: string) => {
+  const handleRevoke = async (id: string) => {
+    const ok = await confirm({
+      title: 'Revoke this monitor assignment?',
+      message: 'The monitor will no longer be able to watch this senior.',
+      confirmText: 'Revoke',
+      danger: true,
+    });
+    if (!ok) return;
     MonitorService.deleteMonitorMapping(id)
       .then(() => {
+        notify('Monitor assignment revoked.', 'success');
         fetchMonitorAssignments();
       })
       .catch((err) => {
         console.error('Failed to revoke monitor mapping from API:', err);
-        alert('Failed to revoke monitor mapping from API.');
+        notify(`Failed to revoke assignment: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 
@@ -157,7 +167,7 @@ export const Monitors: React.FC = () => {
       })
       .catch((err) => {
         console.error('Failed to assign monitor in API:', err);
-        alert('Failed to assign monitor in API.');
+        notify(`Failed to assign monitor: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 

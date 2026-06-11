@@ -5,6 +5,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { Box, CircularProgress } from '@mui/material';
 import { theme } from './theme/theme';
 import { Layout } from './components/Layout';
+import { FeedbackProvider } from './components/FeedbackProvider';
 import { ProfileService, AuthService } from './api';
 
 // Pages are lazy-loaded: each one downloads only when first visited,
@@ -150,15 +151,17 @@ const App: React.FC = () => {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <BrowserRouter>
-        {isAuthenticated ? (
-          <AppShell profile={profile} onUpdateProfile={setProfile} onLogout={handleLogout} />
-        ) : (
-          <Suspense fallback={<PageLoader />}>
-            <Login onLoginSuccess={() => setIsAuthenticated(true)} />
-          </Suspense>
-        )}
-      </BrowserRouter>
+      <FeedbackProvider>
+        <BrowserRouter>
+          {isAuthenticated ? (
+            <AppShell profile={profile} onUpdateProfile={setProfile} onLogout={handleLogout} />
+          ) : (
+            <Suspense fallback={<PageLoader />}>
+              <Login onLoginSuccess={() => setIsAuthenticated(true)} />
+            </Suspense>
+          )}
+        </BrowserRouter>
+      </FeedbackProvider>
     </ThemeProvider>
   );
 };

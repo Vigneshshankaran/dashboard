@@ -29,6 +29,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
 import { AdminService } from '../api';
 import { DataState } from '../components/DataState';
+import { useFeedback } from '../components/FeedbackProvider';
 import type { UserRole } from '../api';
 
 
@@ -46,6 +47,7 @@ interface UserItem {
 }
 
 export const Users: React.FC = () => {
+  const { notify, confirm } = useFeedback();
   // Mock data of 11 users matching the screenshot
   const [users, setUsers] = useState<UserItem[]>([]);
 
@@ -158,7 +160,7 @@ export const Users: React.FC = () => {
       })
       .catch((err) => {
         console.error('Failed to create user in API:', err);
-        alert(`Failed to create user: ${err?.message || 'Unknown error from server'}`);
+        notify(`Failed to create user: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 
@@ -200,34 +202,43 @@ export const Users: React.FC = () => {
       })
       .catch((err) => {
         console.error('Failed to update user in API:', err);
-        alert(`Failed to update user: ${err?.message || 'Unknown error from server'}`);
+        notify(`Failed to update user: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 
   // Delete User handler — confirm first, surface the real server error,
   // and offer deactivation when hard-delete is refused (e.g. the user
   // still has linked seniors, devices, or alert records).
-  const handleDeleteUser = (user: UserItem) => {
-    if (!window.confirm(`Permanently delete ${user.name}? This cannot be undone.`)) return;
-    AdminService.adminDeleteUser(user.id)
-      .then(() => {
-        fetchUsers();
-      })
-      .catch((err) => {
-        console.error('Failed to delete user in API:', err);
-        const detail = err?.message || 'Unknown error from server';
-        const deactivateInstead = window.confirm(
-          `Delete failed: ${detail}\n\nThis usually means the user still has linked records (guardian/senior mappings, devices, or alerts). Deactivate the account instead?`
-        );
-        if (deactivateInstead) {
-          AdminService.adminDeactivateUser(user.id)
-            .then(() => fetchUsers())
-            .catch((err2) => {
-              console.error('Failed to deactivate user in API:', err2);
-              alert(`Deactivation also failed: ${err2?.message || 'Unknown error from server'}`);
-            });
-        }
+  const handleDeleteUser = async (user: UserItem) => {
+    const ok = await confirm({
+      title: `Delete ${user.name}?`,
+      message: 'This permanently removes the account and cannot be undone.',
+      confirmText: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+
+    try {
+      await AdminService.adminDeleteUser(user.id);
+      notify(`${user.name} was deleted.`, 'success');
+      fetchUsers();
+    } catch (err: any) {
+      console.error('Failed to delete user in API:', err);
+      const deactivateInstead = await confirm({
+        title: 'Delete failed',
+        message: `${err?.message || 'Unknown error from server'}\n\nThis usually means the user still has linked records (guardian/senior mappings, devices, or alerts). Deactivate the account instead?`,
+        confirmText: 'Deactivate',
       });
+      if (!deactivateInstead) return;
+      try {
+        await AdminService.adminDeactivateUser(user.id);
+        notify(`${user.name} was deactivated.`, 'success');
+        fetchUsers();
+      } catch (err2: any) {
+        console.error('Failed to deactivate user in API:', err2);
+        notify(`Deactivation also failed: ${err2?.message || 'Unknown error from server'}`, 'error');
+      }
+    }
   };
 
   // Filter logic

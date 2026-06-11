@@ -24,6 +24,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SaveIcon from '@mui/icons-material/Save';
 import CloseIcon from '@mui/icons-material/Close';
 import { ProfileService, AuthService } from '../api';
+import { useFeedback } from '../components/FeedbackProvider';
 
 
 interface ProfileProps {
@@ -44,6 +45,7 @@ interface ProfileProps {
 }
 
 export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) => {
+  const { notify } = useFeedback();
   // Toggle editing state
   const [isEditing, setIsEditing] = useState(false);
 
@@ -220,7 +222,7 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
       })
       .catch((err) => {
         console.error('Failed to update profile or personal info on API:', err);
-        alert('Failed to update profile or personal info on API.');
+        notify(`Failed to update profile: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 
@@ -237,11 +239,11 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
     AuthService.verifyEmail(userId)
       .then(() => {
         setEmailVerified(true);
-        alert('Email verified successfully!');
+        notify('Email verified successfully!', 'success');
       })
       .catch((err: any) => {
         console.error('Failed to verify email:', err);
-        alert('Failed to verify email.');
+        notify(`Failed to verify email: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 
@@ -249,11 +251,11 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
     ProfileService.verifyPhone()
       .then(() => {
         setPhoneVerified(true);
-        alert('Phone verified successfully!');
+        notify('Phone verified successfully!', 'success');
       })
       .catch((err: any) => {
         console.error('Failed to verify phone:', err);
-        alert('Failed to verify phone.');
+        notify(`Failed to verify phone: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 

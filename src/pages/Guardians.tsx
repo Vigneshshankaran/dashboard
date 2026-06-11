@@ -31,6 +31,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { AdminService, SeniorService } from '../api';
 import { DataState } from '../components/DataState';
+import { useFeedback } from '../components/FeedbackProvider';
 
 
 // Senior-Guardian mapping item
@@ -46,6 +47,7 @@ interface MappingItem {
 }
 
 export const Guardians: React.FC = () => {
+  const { notify, confirm } = useFeedback();
   const [mappings, setMappings] = useState<MappingItem[]>([]);
   const [seniors, setSeniors] = useState<{ id: string; name: string; email: string }[]>([]);
   const [guardians, setGuardians] = useState<{ id: string; name: string; email: string }[]>([]);
@@ -143,14 +145,22 @@ export const Guardians: React.FC = () => {
       });
   };
 
-  const handleDelink = (id: string) => {
+  const handleDelink = async (id: string) => {
+    const ok = await confirm({
+      title: 'Remove this guardian link?',
+      message: 'The guardian will no longer be connected to this senior.',
+      confirmText: 'Remove',
+      danger: true,
+    });
+    if (!ok) return;
     SeniorService.deleteMapping(id)
       .then(() => {
+        notify('Guardian link removed.', 'success');
         fetchMappings();
       })
       .catch((err) => {
         console.error('Failed to delete mapping from API:', err);
-        alert('Failed to delete mapping from API.');
+        notify(`Failed to remove link: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 
@@ -170,12 +180,13 @@ export const Guardians: React.FC = () => {
 
     AdminService.adminMapGuardianSenior(payload)
       .then(() => {
+        notify('Guardian linked to senior.', 'success');
         fetchMappings();
         handleCloseLinkDialog();
       })
       .catch((err) => {
         console.error('Failed to map guardian to senior in API:', err);
-        alert('Failed to map guardian to senior in API.');
+        notify(`Failed to link guardian: ${err?.message || 'Unknown error from server'}`, 'error');
       });
   };
 
