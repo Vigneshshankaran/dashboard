@@ -40,7 +40,7 @@ import DeviceHubIcon from '@mui/icons-material/DeviceHub';
 
 import { FallAlertModal } from '../components/FallAlertModal';
 import { DataState } from '../components/DataState';
-import { SeniorService, DeviceAssignmentService, AlarmService, ComplianceService, AdminService } from '../api';
+import { SeniorService, DeviceAssignmentService, AlarmService, ComplianceService, AdminService, MonitorService, VitalService } from '../api';
 
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
@@ -101,14 +101,16 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
 
-  // Load Seniors from API.
-  // Admins see ALL seniors (/v1/admin/seniors); guardians see only the
-  // seniors mapped to them (/v1/seniors/my-seniors) — per the backend spec.
+  // Load Seniors from API — each role has its own endpoint per the spec:
+  // ADMIN → all seniors, MONITOR → seniors they watch, GUARDIAN → their seniors.
   const loadSeniors = () => {
     setPageError(null);
-    const apiCall = currentUserRole === 'ADMIN'
-      ? AdminService.adminGetSeniors()
-      : SeniorService.getMySeniors();
+    const apiCall =
+      currentUserRole === 'ADMIN'
+        ? AdminService.adminGetSeniors()
+        : currentUserRole === 'MONITOR'
+          ? MonitorService.getMonitorsMySeniors()
+          : SeniorService.getMySeniors();
     apiCall
       .then((res) => {
         setPageLoading(false);
@@ -223,15 +225,28 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
     loadSeniors();
   }, [currentUserRole]);
 
-  // Load selected senior's details (devices, alarms, etc.)
+  // Latest device vitals (from /v1/vitals/summary) for the selected senior
+  const [latestVitals, setLatestVitals] = useState<{
+    heartRate?: number;
+    spo2?: number;
+    temperature?: number;
+    glucose?: number;
+    bp?: string;
+  } | null>(null);
+
+  // Load selected senior's details (devices, alarms, vitals, etc.)
   useEffect(() => {
     if (!selectedSenior || !selectedSenior.id) return;
 
-    // Fetch assigned devices — only show what the backend actually reports
+    setLatestVitals(null);
+
+    // Fetch assigned devices — only show what the backend actually reports.
+    // Alarms and vitals depend on the device list, so they chain off it.
     DeviceAssignmentService.getSeniorDevices(selectedSenior.id)
       .then((devicesRes) => {
         const list = (devicesRes || []).map((d: any, idx: number) => ({
           id: d.id || d.deviceUUID || d.imei || String(idx),
+          uuid: d.deviceUUID || d.uuid || d.id || '',
           name: d.deviceName || d.name || 'Wearable Device',
           deviceId: d.deviceTypeId ? `#${d.deviceTypeId}` : '—',
           imei: d.imei || d.deviceIdentifier || '—',
@@ -247,38 +262,68 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
           alerts: [],
         }));
         setSeniorDevices(list);
+
+        // Alert History: only alarms raised by THIS senior's devices
+        const deviceKeys = new Set(
+          list.flatMap((d: any) => [d.uuid, d.imei]).filter((k: string) => k && k !== '—')
+        );
+        AlarmService.getAllAlarms()
+          .then((alarmsRes) => {
+            const filtered = (alarmsRes || []).filter((a: any) => deviceKeys.has(a.deviceUUID) || deviceKeys.has(a.ident));
+            const alarmList = filtered.map((a: any, idx: number) => {
+              let dateStr = '—';
+              if (a.timestamp) {
+                const d = new Date(a.timestamp);
+                dateStr = d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+              }
+              return {
+                id: String(a.id ?? idx),
+                date: dateStr,
+                relative: '',
+                type: a.alarmType || 'Alarm',
+                severity: a.severity || 'MEDIUM',
+                device: a.deviceUUID ? String(a.deviceUUID).slice(0, 8) : '—',
+                description: a.description || '—',
+                status: a.resolved ? 'Resolved' : 'Open',
+                resolvedBy: a.resolvedBy || '—',
+              };
+            });
+            setSeniorAlerts(alarmList);
+          })
+          .catch((err) => {
+            console.warn('Failed to load alarms from API:', err);
+            setSeniorAlerts([]);
+          });
+
+        // Latest vitals from the senior's first device (last 7 days)
+        const firstDeviceUuid = list.find((d: any) => d.uuid)?.uuid;
+        if (firstDeviceUuid) {
+          VitalService.getVitalsSummary({ deviceUUID: firstDeviceUuid, days: 7 })
+            .then((vitalsRes) => {
+              const entries = Array.isArray(vitalsRes)
+                ? vitalsRes
+                : vitalsRes?.data ?? vitalsRes?.vitalSummaries ?? [];
+              if (Array.isArray(entries) && entries.length > 0) {
+                // Most recent day wins
+                const sorted = [...entries].sort((a: any, b: any) => String(a.date || '').localeCompare(String(b.date || '')));
+                const v = sorted[sorted.length - 1];
+                setLatestVitals({
+                  heartRate: v.heartRate,
+                  spo2: v.spo2,
+                  temperature: v.temperature,
+                  glucose: v.glucose,
+                  bp: v.systolicBp && v.diastolicBp ? `${v.systolicBp}/${v.diastolicBp}` : undefined,
+                });
+              }
+            })
+            .catch((err) => {
+              console.warn('Failed to load vitals from API:', err);
+            });
+        }
       })
       .catch((err) => {
         console.warn('Failed to load devices for senior from API:', err);
         setSeniorDevices([]);
-      });
-
-    // Fetch alarms
-    AlarmService.getAllAlarms()
-      .then((alarmsRes) => {
-        const filtered = (alarmsRes || []).filter((a: any) => a.deviceUUID === selectedSenior.id || !a.deviceUUID);
-        const list = filtered.map((a: any, idx: number) => {
-          let dateStr = '—';
-          if (a.timestamp) {
-            const d = new Date(a.timestamp);
-            dateStr = d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-          }
-          return {
-            id: String(a.id ?? idx),
-            date: dateStr,
-            relative: '',
-            type: a.alarmType || 'Alarm',
-            severity: a.severity || 'MEDIUM',
-            device: a.deviceUUID ? a.deviceUUID.slice(0, 8) : '—',
-            description: a.description || '—',
-            status: a.resolved ? 'Resolved' : 'Open',
-            resolvedBy: a.resolvedBy || '—',
-          };
-        });
-        setSeniorAlerts(list);
-      })
-      .catch((err) => {
-        console.warn('Failed to load alarms from API:', err);
         setSeniorAlerts([]);
       });
 
@@ -298,28 +343,55 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
         setSeniorReports([]);
       });
 
-    // Fetch guardians — no invented ages/cities; missing fields show as blank
-    SeniorService.getMyGuardians()
-      .then((guardiansRes) => {
-        const list = (guardiansRes || []).map((g: any, idx: number) => ({
-          id: g.id || String(idx),
-          name: g.name || `${g.firstName || ''} ${g.lastName || ''}`.trim() || 'Guardian',
-          relationship: g.relationship || 'Guardian',
-          age: g.age ?? null,
-          location: g.location || g.city || '',
-          email: g.email || '—',
-          phone: g.phoneNumber ? String(g.phoneNumber) : '—',
-          whatsapp: Boolean(g.whatsapp),
-          call: Boolean(g.phoneNumber),
-          notes: g.notes || '',
-        }));
-        setSeniorGuardians(list);
-      })
-      .catch((err) => {
-        console.warn('Failed to load guardians from API:', err);
-        setSeniorGuardians([]);
-      });
-  }, [selectedSenior]);
+    // Fetch THIS senior's guardians.
+    // ADMIN: from the guardian↔senior mappings, filtered to the selected senior.
+    // SENIOR: /v1/seniors/my-guardians (their own guardians).
+    // Other roles have no endpoint for another person's guardians → empty list.
+    const mapGuardian = (g: any, idx: number, relationship?: string) => ({
+      id: g.id || g.userId || String(idx),
+      name:
+        g.name ||
+        `${g.firstName || g.first_name || ''} ${g.lastName || g.last_name || ''}`.trim() ||
+        'Guardian',
+      relationship: relationship || g.relationship || 'Guardian',
+      age: g.age ?? null,
+      location: g.location || g.city || '',
+      email: g.primaryEmail || g.email || '—',
+      phone: g.phoneNumber || g.phone_number ? String(g.phoneNumber || g.phone_number) : '—',
+      whatsapp: Boolean(g.whatsapp),
+      call: Boolean(g.phoneNumber || g.phone_number),
+      notes: g.notes || '',
+    });
+
+    if (currentUserRole === 'ADMIN') {
+      AdminService.adminGetMappings()
+        .then((mappingsRes) => {
+          const forThisSenior = (mappingsRes || []).filter((m: any) => {
+            const sid = m.seniorId || m.senior?.id || m.senior?.userId || m.seniorUUID;
+            return sid === selectedSenior.id;
+          });
+          const list = forThisSenior.map((m: any, idx: number) =>
+            mapGuardian(m.guardian || { name: m.guardianName, email: m.guardianEmail }, idx, m.relationship)
+          );
+          setSeniorGuardians(list);
+        })
+        .catch((err) => {
+          console.warn('Failed to load guardian mappings from API:', err);
+          setSeniorGuardians([]);
+        });
+    } else if (currentUserRole === 'SENIOR') {
+      SeniorService.getMyGuardians()
+        .then((guardiansRes) => {
+          setSeniorGuardians((guardiansRes || []).map((g: any, idx: number) => mapGuardian(g, idx)));
+        })
+        .catch((err) => {
+          console.warn('Failed to load guardians from API:', err);
+          setSeniorGuardians([]);
+        });
+    } else {
+      setSeniorGuardians([]);
+    }
+  }, [selectedSenior, currentUserRole]);
 
   // ─── State for Alert History tab ───────────────────────────────────────────
   const [alertTypeFilter, setAlertTypeFilter] = useState('ALL');
@@ -327,6 +399,17 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
   const filteredSeniorAlerts = seniorAlerts.filter(
     (a) => alertTypeFilter === 'ALL' || String(a.type).toLowerCase().includes(alertTypeFilter.toLowerCase())
   );
+
+  // Vitals shown on screen: live device readings (vitals API) win over
+  // whatever static values the senior record may carry.
+  const vitalsView = {
+    heartRate: latestVitals?.heartRate ?? selectedSenior['latestHeartRate'],
+    bp: latestVitals?.bp || selectedSenior['latestBp'],
+    spo2: latestVitals?.spo2 ?? selectedSenior['latestSpo2'],
+    temperature: latestVitals?.temperature ?? selectedSenior['latestTemperature'],
+    glucose: latestVitals?.glucose ?? selectedSenior['latestBloodGlucose'],
+    respRate: selectedSenior['latestRespRate'],
+  };
 
   // Download the visible alert history as a CSV file
   const handleExportAlertsCsv = () => {
@@ -631,7 +714,7 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
           <Grid size={{ xs: 6, sm: 4, md: 2 }}>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 800, color: '#10B981', lineHeight: 1, mb: 0.5 }}>
-                {selectedSenior.latestSpo2}%
+                {vitalsView.spo2}%
               </Typography>
               <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 700, letterSpacing: '0.5px' }}>
                 SPO₂ (LATEST)
@@ -641,7 +724,7 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
           <Grid size={{ xs: 6, sm: 4, md: 2 }}>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 800, color: '#D97706', lineHeight: 1, mb: 0.5 }}>
-                {selectedSenior.latestBp}
+                {vitalsView.bp}
               </Typography>
               <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 700, letterSpacing: '0.5px' }}>
                 BLOOD PRESSURE
@@ -725,12 +808,12 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
                   <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 500 }}>Live readings</Typography>
                 </Box>
                 <Grid container spacing={2}>
-                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><FavoriteIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{selectedSenior.latestHeartRate || '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>HEART RATE</Typography><Typography variant="caption" sx={{ color: selectedSenior.latestHeartRate ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{selectedSenior.latestHeartRate ? 'Normal range' : '—'}</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><SpeedIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{selectedSenior.latestBp || '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>BLOOD PRESSURE</Typography><Typography variant="caption" sx={{ color: selectedSenior.latestBp !== '—' ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{selectedSenior.latestBp !== '—' ? 'Normal' : '—'}</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><OpacityIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{selectedSenior.latestSpo2 ? `${selectedSenior.latestSpo2}%` : '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>OXYGEN SAT.</Typography><Typography variant="caption" sx={{ color: selectedSenior.latestSpo2 ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{selectedSenior.latestSpo2 ? 'Normal range' : '—'}</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><ThermostatIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{selectedSenior.latestTemperature ? `${selectedSenior.latestTemperature}°C` : '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>TEMPERATURE</Typography><Typography variant="caption" sx={{ color: selectedSenior.latestTemperature ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{selectedSenior.latestTemperature ? 'Normal' : '—'}</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><WaterDropIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{selectedSenior.latestBloodGlucose || '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>BLOOD GLUCOSE</Typography><Typography variant="caption" sx={{ color: selectedSenior.latestBloodGlucose ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{selectedSenior.latestBloodGlucose ? 'Normal' : '—'}</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><AirIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{selectedSenior.latestRespRate || '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>RESP. RATE</Typography><Typography variant="caption" sx={{ color: selectedSenior.latestRespRate ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{selectedSenior.latestRespRate ? 'Normal' : '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><FavoriteIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{vitalsView.heartRate || '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>HEART RATE</Typography><Typography variant="caption" sx={{ color: vitalsView.heartRate ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{vitalsView.heartRate ? 'Normal range' : '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><SpeedIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{vitalsView.bp || '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>BLOOD PRESSURE</Typography><Typography variant="caption" sx={{ color: vitalsView.bp !== '—' ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{vitalsView.bp !== '—' ? 'Normal' : '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><OpacityIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{vitalsView.spo2 ? `${vitalsView.spo2}%` : '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>OXYGEN SAT.</Typography><Typography variant="caption" sx={{ color: vitalsView.spo2 ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{vitalsView.spo2 ? 'Normal range' : '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><ThermostatIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{vitalsView.temperature ? `${vitalsView.temperature}°C` : '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>TEMPERATURE</Typography><Typography variant="caption" sx={{ color: vitalsView.temperature ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{vitalsView.temperature ? 'Normal' : '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><WaterDropIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{vitalsView.glucose || '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>BLOOD GLUCOSE</Typography><Typography variant="caption" sx={{ color: vitalsView.glucose ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{vitalsView.glucose ? 'Normal' : '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><AirIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{vitalsView.respRate || '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>RESP. RATE</Typography><Typography variant="caption" sx={{ color: vitalsView.respRate ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{vitalsView.respRate ? 'Normal' : '—'}</Typography></Box></Grid>
                 </Grid>
               </Card>
 
