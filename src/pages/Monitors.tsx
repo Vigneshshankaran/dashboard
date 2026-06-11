@@ -45,12 +45,12 @@ export const Monitors: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSeniorFilter, setSelectedSeniorFilter] = useState('ALL');
 
-  // Dialog State for Assign Monitor
+  // Dialog State for Assign Monitor — dropdowns of real users (UUIDs)
   const [openAssignDialog, setOpenAssignDialog] = useState(false);
-  const [assignSeniorName, setAssignSeniorName] = useState('');
-  const [assignSeniorEmail, setAssignSeniorEmail] = useState('');
-  const [assignMonitorName, setAssignMonitorName] = useState('');
-  const [assignMonitorEmail, setAssignMonitorEmail] = useState('');
+  const [assignSeniorId, setAssignSeniorId] = useState('');
+  const [assignMonitorId, setAssignMonitorId] = useState('');
+  const [seniorOptions, setSeniorOptions] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [monitorOptions, setMonitorOptions] = useState<{ id: string; name: string; email: string }[]>([]);
 
   // Page load / error state
   const [pageLoading, setPageLoading] = useState(true);
@@ -60,21 +60,65 @@ export const Monitors: React.FC = () => {
     fetchMonitorAssignments();
   }, []);
 
+  // Tolerant readers — backend may send flat, nested, or snake_case fields
+  const personName = (p: any) =>
+    p?.name || `${p?.firstName || p?.first_name || ''} ${p?.lastName || p?.last_name || ''}`.trim();
+  const personEmail = (p: any) => p?.primaryEmail || p?.email || '';
+  const personPhone = (p: any) => {
+    const ph = p?.phoneNumber || p?.phone_number;
+    return ph ? String(ph) : '';
+  };
+
   const fetchMonitorAssignments = () => {
     setPageError(null);
-    AdminService.adminGetMonitorMappings()
-      .then((res) => {
+    // The mappings often carry only user IDs — fetch users too so we can
+    // resolve names/emails, and to populate the Assign dialog dropdowns.
+    Promise.all([
+      AdminService.adminGetMonitorMappings(),
+      AdminService.adminGetUsers().catch(() => []),
+    ])
+      .then(([res, users]) => {
         setPageLoading(false);
+
+        const usersById: Record<string, any> = {};
+        const seniors: { id: string; name: string; email: string }[] = [];
+        const monitors: { id: string; name: string; email: string }[] = [];
+        (users || []).forEach((u: any) => {
+          const id = u.id || u.userId;
+          if (!id) return;
+          usersById[id] = u;
+          const option = { id, name: personName(u) || 'User', email: personEmail(u) || '—' };
+          if (u.role === 'SENIOR') seniors.push(option);
+          else if (u.role === 'MONITOR') monitors.push(option);
+        });
+        setSeniorOptions(seniors);
+        setMonitorOptions(monitors);
+
         if (res) {
-          const list: MonitorAssignmentItem[] = res.map((m: any) => ({
-            id: m.id || m.mappingId || String(Math.random()),
-            seniorName: m.seniorName || 'Senior',
-            seniorEmail: m.seniorEmail || '—',
-            seniorPhone: m.seniorPhone || '—',
-            monitorName: m.monitorName || 'Monitor',
-            monitorEmail: m.monitorEmail || '—',
-            createdDate: m.createdDate || m.date || '—',
-          }));
+          const list: MonitorAssignmentItem[] = res.map((m: any, idx: number) => {
+            // Senior/monitor may be nested objects, or just IDs we resolve via users
+            const senior = m.senior || usersById[m.seniorId || m.seniorUUID] || {};
+            const monitor = m.monitor || usersById[m.monitorId || m.monitorUUID] || {};
+
+            let dateStr = '—';
+            const rawDate = m.createdAt || m.createdDate || m.date;
+            if (rawDate) {
+              const d = new Date(rawDate);
+              if (!isNaN(d.getTime())) {
+                dateStr = d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+              }
+            }
+
+            return {
+              id: m.id || m.mappingId || String(idx),
+              seniorName: m.seniorName || personName(senior) || 'Senior',
+              seniorEmail: m.seniorEmail || personEmail(senior) || '—',
+              seniorPhone: m.seniorPhone || personPhone(senior) || '—',
+              monitorName: m.monitorName || personName(monitor) || 'Monitor',
+              monitorEmail: m.monitorEmail || personEmail(monitor) || '—',
+              createdDate: dateStr,
+            };
+          });
           setAssignments(list);
         }
       })
@@ -97,23 +141,19 @@ export const Monitors: React.FC = () => {
       });
   };
 
-  // Add Assignment handler
+  // Add Assignment handler — sends the selected users' real UUIDs
   const handleAssignMonitor = () => {
-    if (!assignSeniorName.trim() || !assignMonitorName.trim()) return;
+    if (!assignSeniorId || !assignMonitorId) return;
 
-    const payload = {
-      seniorId: assignSeniorName.trim(),
-      monitorId: assignMonitorName.trim(),
-    };
-
-    MonitorService.assignMonitor(payload)
+    MonitorService.assignMonitor({
+      seniorId: assignSeniorId,
+      monitorId: assignMonitorId,
+    })
       .then(() => {
         fetchMonitorAssignments();
         setOpenAssignDialog(false);
-        setAssignSeniorName('');
-        setAssignSeniorEmail('');
-        setAssignMonitorName('');
-        setAssignMonitorEmail('');
+        setAssignSeniorId('');
+        setAssignMonitorId('');
       })
       .catch((err) => {
         console.error('Failed to assign monitor in API:', err);
@@ -388,40 +428,59 @@ export const Monitors: React.FC = () => {
       <Dialog open={openAssignDialog} onClose={() => setOpenAssignDialog(false)}>
         <DialogTitle sx={{ fontWeight: 750 }}>Assign Monitor to Senior</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.25, pt: 1.5, minWidth: 340 }}>
-          <TextField
-            label="Senior Name"
-            fullWidth
-            value={assignSeniorName}
-            onChange={(e) => setAssignSeniorName(e.target.value)}
-            size="small"
-          />
-          <TextField
-            label="Senior Email (optional)"
-            fullWidth
-            value={assignSeniorEmail}
-            onChange={(e) => setAssignSeniorEmail(e.target.value)}
-            size="small"
-          />
-          <TextField
-            label="Monitor Name"
-            fullWidth
-            value={assignMonitorName}
-            onChange={(e) => setAssignMonitorName(e.target.value)}
-            size="small"
-          />
-          <TextField
-            label="Monitor Email (optional)"
-            fullWidth
-            value={assignMonitorEmail}
-            onChange={(e) => setAssignMonitorEmail(e.target.value)}
-            size="small"
-          />
+          <Box>
+            <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, mb: 0.5, display: 'block' }}>
+              SENIOR
+            </Typography>
+            <Select
+              fullWidth
+              size="small"
+              value={assignSeniorId}
+              onChange={(e) => setAssignSeniorId(e.target.value)}
+              displayEmpty
+            >
+              <MenuItem value="" disabled>
+                {seniorOptions.length === 0 ? 'No seniors found' : 'Select a senior...'}
+              </MenuItem>
+              {seniorOptions.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name} — {s.email}
+                </MenuItem>
+              ))}
+            </Select>
+          </Box>
+          <Box>
+            <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, mb: 0.5, display: 'block' }}>
+              MONITOR
+            </Typography>
+            <Select
+              fullWidth
+              size="small"
+              value={assignMonitorId}
+              onChange={(e) => setAssignMonitorId(e.target.value)}
+              displayEmpty
+            >
+              <MenuItem value="" disabled>
+                {monitorOptions.length === 0 ? 'No monitors found' : 'Select a monitor...'}
+              </MenuItem>
+              {monitorOptions.map((m) => (
+                <MenuItem key={m.id} value={m.id}>
+                  {m.name} — {m.email}
+                </MenuItem>
+              ))}
+            </Select>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenAssignDialog(false)} color="inherit">
             Cancel
           </Button>
-          <Button onClick={handleAssignMonitor} variant="contained" sx={{ backgroundColor: '#D45529', '&:hover': { backgroundColor: '#B23F1C' } }}>
+          <Button
+            onClick={handleAssignMonitor}
+            variant="contained"
+            disabled={!assignSeniorId || !assignMonitorId}
+            sx={{ backgroundColor: '#D45529', '&:hover': { backgroundColor: '#B23F1C' } }}
+          >
             Assign
           </Button>
         </DialogActions>

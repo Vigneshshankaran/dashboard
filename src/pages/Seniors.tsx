@@ -33,12 +33,14 @@ import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import InfoIcon from '@mui/icons-material/Info';
 import SendIcon from '@mui/icons-material/Send';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ErrorIcon from '@mui/icons-material/Error';
 import DeviceHubIcon from '@mui/icons-material/DeviceHub';
 
 import { FallAlertModal } from '../components/FallAlertModal';
 import { DataState } from '../components/DataState';
-import { SeniorService, DeviceAssignmentService, AlarmService, ComplianceService } from '../api';
+import { SeniorService, DeviceAssignmentService, AlarmService, ComplianceService, AdminService } from '../api';
 
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
@@ -99,10 +101,15 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
 
-  // Load Seniors from API
+  // Load Seniors from API.
+  // Admins see ALL seniors (/v1/admin/seniors); guardians see only the
+  // seniors mapped to them (/v1/seniors/my-seniors) — per the backend spec.
   const loadSeniors = () => {
     setPageError(null);
-    SeniorService.getMySeniors()
+    const apiCall = currentUserRole === 'ADMIN'
+      ? AdminService.adminGetSeniors()
+      : SeniorService.getMySeniors();
+    apiCall
       .then((res) => {
         setPageLoading(false);
         if (res) {
@@ -202,9 +209,10 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
       });
   };
 
+  // Re-run when the role arrives (the profile loads a moment after sign-in)
   useEffect(() => {
     loadSeniors();
-  }, []);
+  }, [currentUserRole]);
 
   // Load selected senior's details (devices, alarms, etc.)
   useEffect(() => {
@@ -337,6 +345,17 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
 
   const [guardianPrefs, setGuardianPrefs] = useState<Record<string, any>>({});
 
+  // ─── Prev / Next senior navigation ─────────────────────────────────────────
+  const currentSeniorIndex = seniorsList.findIndex((s) => s.id === selectedSenior.id);
+
+  const goToPrevSenior = () => {
+    if (currentSeniorIndex > 0) setSelectedSenior(seniorsList[currentSeniorIndex - 1]);
+  };
+
+  const goToNextSenior = () => {
+    if (currentSeniorIndex < seniorsList.length - 1) setSelectedSenior(seniorsList[currentSeniorIndex + 1]);
+  };
+
   // ─── Handlers ──────────────────────────────────────────────────────────────
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setActiveSubTab(newValue);
@@ -364,6 +383,24 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
   const incidentNotesCount = activityLogs.filter(l => l.category === 'INCIDENT').length;
   const medicalNotesCount = activityLogs.filter(l => l.category === 'MEDICAL').length;
   const lastNoteTime = activityLogs.length > 0 ? activityLogs[0].time : '—';
+
+  // No seniors in the system yet — explain instead of showing a blank profile
+  if (!pageLoading && !pageError && seniorsList.length === 0) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 6 }}>
+        <Card sx={{ maxWidth: 520, width: '100%', textAlign: 'center', py: 6, px: 4 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 1.5, color: '#1A0E07' }}>
+            No seniors found
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#8C7E76', lineHeight: 1.6 }}>
+            {currentUserRole === 'ADMIN'
+              ? 'There are no senior residents registered in the system yet. Create a user with the SENIOR role on the Users page, then map a guardian to them on the Guardians page.'
+              : 'No seniors are mapped to your account yet. Ask an administrator to link you to a senior, or send a mapping request.'}
+          </Typography>
+        </Card>
+      </Box>
+    );
+  }
 
   return (
     <DataState loading={pageLoading} error={pageError} onRetry={loadSeniors}>
@@ -475,7 +512,57 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
           </Box>
 
           {/* Header Action Buttons */}
-          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', width: { xs: '100%', md: 'auto' } }}>
+          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', width: { xs: '100%', md: 'auto' } }}>
+            {/* Prev / Next senior — only when there is more than one resident */}
+            {seniorsList.length > 1 && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<ChevronLeftIcon sx={{ fontSize: 16 }} />}
+                  onClick={goToPrevSenior}
+                  disabled={currentSeniorIndex <= 0}
+                  sx={{
+                    color: '#FFFFFF',
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    fontSize: '0.78rem',
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': { borderColor: '#FFFFFF', bgcolor: 'rgba(255, 255, 255, 0.08)' },
+                    '&.Mui-disabled': { color: 'rgba(255, 255, 255, 0.3)', borderColor: 'rgba(255, 255, 255, 0.08)' },
+                  }}
+                >
+                  Prev
+                </Button>
+                <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 700, whiteSpace: 'nowrap', px: 0.5 }}>
+                  {currentSeniorIndex + 1} of {seniorsList.length}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
+                  onClick={goToNextSenior}
+                  disabled={currentSeniorIndex >= seniorsList.length - 1}
+                  sx={{
+                    color: '#FFFFFF',
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    fontSize: '0.78rem',
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': { borderColor: '#FFFFFF', bgcolor: 'rgba(255, 255, 255, 0.08)' },
+                    '&.Mui-disabled': { color: 'rgba(255, 255, 255, 0.3)', borderColor: 'rgba(255, 255, 255, 0.08)' },
+                  }}
+                >
+                  Next
+                </Button>
+              </Box>
+            )}
             <Button
               variant="contained"
               onClick={() => setOpenFallAlert(true)}

@@ -58,6 +58,7 @@ interface DeviceItem {
 // Assignment structure
 interface AssignmentItem {
   id: string;
+  deviceUUID: string;
   deviceName: string;
   deviceImei: string;
   seniorName: string;
@@ -153,15 +154,27 @@ export const Devices: React.FC = () => {
     AdminService.adminGetAssignments()
       .then((res) => {
         if (res) {
-          const list: AssignmentItem[] = res.map((a: any) => ({
-            id: a.id || a.assignmentId || String(Math.random()),
-            deviceName: a.deviceName || a.deviceUUID || 'Device',
-            deviceImei: a.deviceImei || '—',
-            seniorName: a.seniorName || 'Senior',
-            seniorPhone: a.seniorPhone || '—',
-            status: 'ASSIGNED',
-            assignedAt: a.assignedAt || '—',
-          }));
+          const list: AssignmentItem[] = res.map((a: any, idx: number) => {
+            // Tolerate flat fields or nested device/senior objects
+            const dev = a.device || {};
+            const sen = a.senior || {};
+            const seniorName =
+              a.seniorName ||
+              sen.name ||
+              `${sen.firstName || sen.first_name || ''} ${sen.lastName || sen.last_name || ''}`.trim() ||
+              'Senior';
+            const seniorPhoneRaw = a.seniorPhone || sen.phoneNumber || sen.phone_number;
+            return {
+              id: a.id || a.assignmentId || String(idx),
+              deviceUUID: a.deviceUUID || dev.uuid || dev.id || '',
+              deviceName: a.deviceName || dev.deviceName || dev.name || a.deviceUUID || 'Device',
+              deviceImei: a.deviceImei || dev.imei || dev.deviceIdentifier || '—',
+              seniorName,
+              seniorPhone: seniorPhoneRaw ? String(seniorPhoneRaw) : '—',
+              status: 'ASSIGNED',
+              assignedAt: a.assignedAt || '—',
+            };
+          });
           setAssignments(list);
         }
       })
@@ -169,6 +182,16 @@ export const Devices: React.FC = () => {
         console.warn('Failed to fetch assignments from API:', err);
       });
   };
+
+  // The devices endpoint doesn't include who a device is assigned to — that
+  // lives in the assignments endpoint. Join the two by device UUID or IMEI.
+  const getAssignedSenior = (device: DeviceItem) =>
+    assignments.find(
+      (a) =>
+        (a.deviceUUID && a.deviceUUID === device.id) ||
+        (a.deviceImei !== '—' && a.deviceImei === device.imei) ||
+        (a.deviceName !== 'Device' && a.deviceName === device.name)
+    );
 
   // Register Device Handler
   const handleRegisterDevice = () => {
@@ -466,12 +489,25 @@ export const Devices: React.FC = () => {
                           />
                         </TableCell>
                         <TableCell sx={{ py: 1.75 }}>
-                          <Typography sx={{ fontWeight: 650, color: '#1A0E07', fontSize: '0.85rem' }}>
-                            {device.assignedToName}
-                          </Typography>
-                          <Typography sx={{ color: '#8C7E76', fontSize: '0.75rem' }}>
-                            {device.assignedToPhone}
-                          </Typography>
+                          {(() => {
+                            const assignment = getAssignedSenior(device);
+                            const name = assignment?.seniorName || (device.assignedToName !== '—' ? device.assignedToName : '');
+                            const phone = assignment?.seniorPhone || (device.assignedToPhone !== '—' ? device.assignedToPhone : '');
+                            return name ? (
+                              <>
+                                <Typography sx={{ fontWeight: 650, color: '#1A0E07', fontSize: '0.85rem' }}>
+                                  {name}
+                                </Typography>
+                                <Typography sx={{ color: '#8C7E76', fontSize: '0.75rem' }}>
+                                  {phone || '—'}
+                                </Typography>
+                              </>
+                            ) : (
+                              <Typography sx={{ color: '#8C7E76', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                                Unassigned
+                              </Typography>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell sx={{ color: '#1A0E07', fontWeight: 500, py: 1.75 }}>
                           {device.battery}
