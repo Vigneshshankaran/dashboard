@@ -110,7 +110,8 @@ export const Users: React.FC = () => {
             const name = u.name || `${fName} ${lName}`.trim() || 'User';
 
             return {
-              id: u.id || u.userId || String(Math.random()),
+              // Real backend id only — a made-up id would make delete/edit fail
+              id: u.id || u.userId || u.uuid || '',
               name,
               username: u.userName || u.username || '—',
               email: u.primaryEmail || u.email || '—',
@@ -157,7 +158,7 @@ export const Users: React.FC = () => {
       })
       .catch((err) => {
         console.error('Failed to create user in API:', err);
-        alert('Failed to create user in API.');
+        alert(`Failed to create user: ${err?.message || 'Unknown error from server'}`);
       });
   };
 
@@ -199,19 +200,33 @@ export const Users: React.FC = () => {
       })
       .catch((err) => {
         console.error('Failed to update user in API:', err);
-        alert('Failed to update user in API.');
+        alert(`Failed to update user: ${err?.message || 'Unknown error from server'}`);
       });
   };
 
-  // Delete User handler
-  const handleDeleteUser = (id: string) => {
-    AdminService.adminDeleteUser(id)
+  // Delete User handler — confirm first, surface the real server error,
+  // and offer deactivation when hard-delete is refused (e.g. the user
+  // still has linked seniors, devices, or alert records).
+  const handleDeleteUser = (user: UserItem) => {
+    if (!window.confirm(`Permanently delete ${user.name}? This cannot be undone.`)) return;
+    AdminService.adminDeleteUser(user.id)
       .then(() => {
         fetchUsers();
       })
       .catch((err) => {
         console.error('Failed to delete user in API:', err);
-        alert('Failed to delete user in API.');
+        const detail = err?.message || 'Unknown error from server';
+        const deactivateInstead = window.confirm(
+          `Delete failed: ${detail}\n\nThis usually means the user still has linked records (guardian/senior mappings, devices, or alerts). Deactivate the account instead?`
+        );
+        if (deactivateInstead) {
+          AdminService.adminDeactivateUser(user.id)
+            .then(() => fetchUsers())
+            .catch((err2) => {
+              console.error('Failed to deactivate user in API:', err2);
+              alert(`Deactivation also failed: ${err2?.message || 'Unknown error from server'}`);
+            });
+        }
       });
   };
 
@@ -499,7 +514,7 @@ export const Users: React.FC = () => {
                       {user.role !== 'ADMIN' && (
                         <IconButton
                           size="small"
-                          onClick={() => handleDeleteUser(user.id)}
+                          onClick={() => handleDeleteUser(user)}
                           sx={{
                             color: '#1A0E07',
                             border: '1px solid #EAE5E0',
