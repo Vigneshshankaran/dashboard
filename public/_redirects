@@ -1,0 +1,5 @@
+# Netlify config (ignored by other hosts)
+# 1. Forward API calls server-side to the backend — same-origin for the browser, so no CORS
+/api/*  https://project-ze144.vercel.app/api/:splat  200
+# 2. SPA fallback: serve the app for page URLs like /seniors, /alerts
+/*      /index.html  200
