@@ -40,6 +40,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import { useEffect } from 'react';
 import { AdminService, DeviceService, DeviceAssignmentService } from '../api';
+import { DataState } from '../components/DataState';
 
 // Device item structure
 interface DeviceItem {
@@ -111,6 +112,10 @@ export const Devices: React.FC = () => {
     setNewDeviceNetwork('');
   };
 
+  // Page load / error state
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+
   // Load devices and assignments from API
   useEffect(() => {
     fetchDevices();
@@ -118,8 +123,10 @@ export const Devices: React.FC = () => {
   }, []);
 
   const fetchDevices = () => {
+    setPageError(null);
     AdminService.adminGetDevices()
       .then((res) => {
+        setPageLoading(false);
         if (res) {
           const list: DeviceItem[] = res.map((d: any) => ({
             id: d.uuid || d.id || String(d.deviceTypeId || Math.random()),
@@ -137,6 +144,8 @@ export const Devices: React.FC = () => {
       })
       .catch((err) => {
         console.warn('Failed to fetch devices from API:', err);
+        setPageLoading(false);
+        setPageError(err?.message || 'The server could not be reached. Please try again.');
       });
   };
 
@@ -261,6 +270,7 @@ export const Devices: React.FC = () => {
   const selectedDeviceDetails = devices.find((d) => d.id === selectedHealthDevice);
 
   return (
+    <DataState loading={pageLoading} error={pageError} onRetry={() => { fetchDevices(); fetchAssignments(); }}>
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
       {/* Page Title & Register Button */}
       <Box
@@ -1229,6 +1239,7 @@ export const Devices: React.FC = () => {
         </DialogActions>
       </Dialog>
     </Box>
+    </DataState>
   );
 };
 export default Devices;

@@ -30,6 +30,7 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import PersonIcon from '@mui/icons-material/Person';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { AdminService, SeniorService } from '../api';
+import { DataState } from '../components/DataState';
 
 
 // Senior-Guardian mapping item
@@ -55,6 +56,10 @@ export const Guardians: React.FC = () => {
   const [openLinkDialog, setOpenLinkDialog] = useState(false);
   const [selectedSeniorId, setSelectedSeniorId] = useState('');
   const [selectedGuardianId, setSelectedGuardianId] = useState('');
+
+  // Page load / error state
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMappings();
@@ -83,8 +88,10 @@ export const Guardians: React.FC = () => {
   }, []);
 
   const fetchMappings = () => {
+    setPageError(null);
     AdminService.adminGetMappings()
       .then((res) => {
+        setPageLoading(false);
         if (res) {
           const mapped: MappingItem[] = res.map((m: any) => {
             const senior = m.senior || {};
@@ -126,6 +133,8 @@ export const Guardians: React.FC = () => {
       })
       .catch((err) => {
         console.error('Failed to fetch mappings from API:', err);
+        setPageLoading(false);
+        setPageError(err?.message || 'The server could not be reached. Please try again.');
       });
   };
 
@@ -201,6 +210,7 @@ export const Guardians: React.FC = () => {
   const canCreate = !!selectedSeniorId && !!selectedGuardianId;
 
   return (
+    <DataState loading={pageLoading} error={pageError} onRetry={fetchMappings}>
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
       {/* Top Header */}
       <Box
@@ -622,6 +632,7 @@ export const Guardians: React.FC = () => {
         </DialogActions>
       </Dialog>
     </Box>
+    </DataState>
   );
 };
 

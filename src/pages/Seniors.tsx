@@ -37,6 +37,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import DeviceHubIcon from '@mui/icons-material/DeviceHub';
 
 import { FallAlertModal } from '../components/FallAlertModal';
+import { DataState } from '../components/DataState';
 import { SeniorService, DeviceAssignmentService, AlarmService, ComplianceService } from '../api';
 
 
@@ -94,10 +95,16 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
 
   const [seniorReports, setSeniorReports] = useState<any[]>([]);
 
+  // Page load / error state
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+
   // Load Seniors from API
-  useEffect(() => {
+  const loadSeniors = () => {
+    setPageError(null);
     SeniorService.getMySeniors()
       .then((res) => {
+        setPageLoading(false);
         if (res) {
           const list = res.map((s: any) => {
             const name = s.name || `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Unnamed Senior';
@@ -190,7 +197,13 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
       })
       .catch((err) => {
         console.error('Failed to load seniors from API:', err);
+        setPageLoading(false);
+        setPageError(err?.message || 'The server could not be reached. Please try again.');
       });
+  };
+
+  useEffect(() => {
+    loadSeniors();
   }, []);
 
   // Load selected senior's details (devices, alarms, etc.)
@@ -353,6 +366,7 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
   const lastNoteTime = activityLogs.length > 0 ? activityLogs[0].time : '—';
 
   return (
+    <DataState loading={pageLoading} error={pageError} onRetry={loadSeniors}>
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
       {/* 1. Header Banner Panel */}
       <Card
@@ -1414,6 +1428,7 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
         respondedBy={currentUserName ? `${currentUserName}${currentUserRole ? ` (${currentUserRole})` : ''}` : undefined}
       />
     </Box>
+    </DataState>
   );
 };
 

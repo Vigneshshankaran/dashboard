@@ -23,6 +23,7 @@ import {
 import LinkIcon from '@mui/icons-material/Link'; // Chain link icon for Assign Monitor
 import LinkOffIcon from '@mui/icons-material/LinkOff'; // Revoke unlink icon
 import { AdminService, MonitorService } from '../api';
+import { DataState } from '../components/DataState';
 
 
 // Monitor assignment structure
@@ -51,13 +52,19 @@ export const Monitors: React.FC = () => {
   const [assignMonitorName, setAssignMonitorName] = useState('');
   const [assignMonitorEmail, setAssignMonitorEmail] = useState('');
 
+  // Page load / error state
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+
   useEffect(() => {
     fetchMonitorAssignments();
   }, []);
 
   const fetchMonitorAssignments = () => {
+    setPageError(null);
     AdminService.adminGetMonitorMappings()
       .then((res) => {
+        setPageLoading(false);
         if (res) {
           const list: MonitorAssignmentItem[] = res.map((m: any) => ({
             id: m.id || m.mappingId || String(Math.random()),
@@ -73,6 +80,8 @@ export const Monitors: React.FC = () => {
       })
       .catch((err) => {
         console.warn('Failed to fetch monitor assignments from API:', err);
+        setPageLoading(false);
+        setPageError(err?.message || 'The server could not be reached. Please try again.');
       });
   };
 
@@ -157,6 +166,7 @@ export const Monitors: React.FC = () => {
   const uniqueSeniorsCount = Array.from(new Set(assignments.map((a) => a.seniorName))).length;
 
   return (
+    <DataState loading={pageLoading} error={pageError} onRetry={fetchMonitorAssignments}>
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
       {/* Top Header */}
       <Box
@@ -417,6 +427,7 @@ export const Monitors: React.FC = () => {
         </DialogActions>
       </Dialog>
     </Box>
+    </DataState>
   );
 };
 export default Monitors;

@@ -102,6 +102,13 @@ There is **one way to sign in: email + password** (the old mobile-OTP option was
 
 ---
 
+## Putting it on the internet (production)
+
+1. Copy `.env.example` to `.env` and set `VITE_API_BASE_URL` to your real backend address (e.g. `https://api.yourdomain.com`). The `/api` proxy trick only works on your own computer.
+2. Make sure the backend allows requests from your site's domain (CORS).
+3. Run `npm run build` — the finished site appears in `dist/`. Upload that folder to any static host (Vercel, Netlify, S3...).
+4. Because the app uses real URLs (`/seniors`, `/alerts`...), tell your host to serve `index.html` for unknown paths ("SPA fallback" — most hosts have a one-click setting for this).
+
 ## Where to change common things
 
 | I want to change… | Edit this file |

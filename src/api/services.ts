@@ -38,12 +38,18 @@ import type {
   AdminCreateUserRequest,
   AdminUpdateUserRequest,
   AdminMapRequest,
+  AuthTokens,
+  UserProfile,
+  SeniorSummary,
+  DeviceSummary,
+  AdminCounts,
+  ComplianceReport,
 } from './types';
 
 // 1. Authentication Services
 export const AuthService = {
   signin: (body: UserSignInRequest) =>
-    request('/v1/auth/signin', { method: 'POST', body, skipAuth: true }),
+    request<AuthTokens>('/v1/auth/signin', { method: 'POST', body, skipAuth: true }),
 
   signupEmail: (body: EmailSignUpRequest) =>
     request('/v1/auth/signup/email', { method: 'POST', body, skipAuth: true }),
@@ -98,7 +104,7 @@ export const AuthService = {
 // 2. User Profile Services
 export const ProfileService = {
   getProfile: () =>
-    client.get('/v1/profile'),
+    client.get<UserProfile & { data?: UserProfile }>('/v1/profile'),
 
   updateProfile: (body: UpdateProfileRequest) =>
     client.put('/v1/profile', body),
@@ -128,13 +134,13 @@ export const SeniorService = {
     client.delete(`/v1/seniors/map/${mappingId}`),
 
   getMySeniors: () =>
-    client.get('/v1/seniors/my-seniors'),
+    client.get<SeniorSummary[]>('/v1/seniors/my-seniors'),
 
   getMyGuardians: () =>
-    client.get('/v1/seniors/my-guardians'),
+    client.get<UserProfile[]>('/v1/seniors/my-guardians'),
 
   getMyMonitors: () =>
-    client.get('/v1/seniors/my-monitors'),
+    client.get<UserProfile[]>('/v1/seniors/my-monitors'),
 };
 
 // 4. Monitor Services
@@ -158,7 +164,7 @@ export const ComplianceService = {
     client.post('/v1/compliance/reports', body),
 
   getReportsOfSenior: (seniorId: UUID) =>
-    client.get(`/v1/compliance/reports/senior/${seniorId}`),
+    client.get<ComplianceReport[]>(`/v1/compliance/reports/senior/${seniorId}`),
 
   completeSubscription: (seniorId: UUID) =>
     client.post('/v1/compliance/subscription/complete', undefined, { seniorId }),
@@ -325,7 +331,7 @@ export const AdminService = {
     client.delete(`/v1/admin/users/${userId}`),
 
   adminGetUsers: (queryParams?: { active?: boolean }) =>
-    client.get('/v1/admin/users', queryParams),
+    client.get<UserProfile[]>('/v1/admin/users', queryParams),
 
   adminGetUsersAvailableForSenior: (seniorId: UUID, queryParams?: { role?: UserRole }) =>
     client.get(`/v1/admin/users/available-for-senior/${seniorId}`, queryParams),
@@ -337,7 +343,7 @@ export const AdminService = {
     client.get(`/v1/admin/seniors/${mobile}`),
 
   adminGetDevices: () =>
-    client.get('/v1/admin/devices'),
+    client.get<DeviceSummary[]>('/v1/admin/devices'),
 
   adminGetAssignments: () =>
     client.get('/v1/admin/assignments'),
@@ -349,7 +355,7 @@ export const AdminService = {
     client.post('/v1/admin/mappings/admin-map', body),
 
   adminGetCounts: () =>
-    client.get('/v1/admin/counts'),
+    client.get<AdminCounts>('/v1/admin/counts'),
 
   adminGetAlarmEvents: () =>
     client.get('/v1/admin/alarm-events'),

@@ -34,6 +34,7 @@ import SyncIcon from '@mui/icons-material/Sync';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import { AlarmService, AdminService } from '../api';
+import { DataState } from '../components/DataState';
 
 
 interface AlarmEventLog {
@@ -126,9 +127,14 @@ interface AlertsProps {
   role?: string;
 }
 
+// How often the alerts list silently re-checks the backend (milliseconds)
+const ALERTS_POLL_INTERVAL = 30_000;
+
 export const Alerts: React.FC<AlertsProps> = ({ role }) => {
   const [activeSubTab, setActiveSubTab] = useState<number>(0);
   const [hasError, setHasError] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
 
   // Filters for System Alerts tab
   const [systemSearch, setSystemSearch] = useState('');
@@ -154,6 +160,8 @@ export const Alerts: React.FC<AlertsProps> = ({ role }) => {
     apiCall
       .then((res) => {
         setHasError(false);
+        setPageLoading(false);
+        setPageError(null);
         if (res) {
           const mapped: AlarmEventLog[] = res.map((a: any) => {
             let type: 'Startup' | 'Alarm' | 'Fall' | 'Panic' | 'Geofence' = 'Alarm';
@@ -193,15 +201,26 @@ export const Alerts: React.FC<AlertsProps> = ({ role }) => {
       .catch((err) => {
         console.error('Failed to load alarms from API:', err);
         setHasError(true);
+        setPageLoading(false);
+        // Only block the page if we have nothing to show; during background
+        // polling we keep the last good data on screen instead.
+        setLogs((prev) => {
+          if (prev.length === 0) {
+            setPageError(err?.message || 'The server could not be reached. Please try again.');
+          }
+          return prev;
+        });
       });
   };
 
+  // Initial load + live polling so new alerts appear without a manual refresh
   useEffect(() => {
     fetchAlerts();
-  }, []);
+    const pollId = setInterval(fetchAlerts, ALERTS_POLL_INTERVAL);
+    return () => clearInterval(pollId);
+  }, [role]);
 
   const handleRefresh = () => {
-    console.log('Refreshing system alerts data...');
     fetchAlerts();
   };
 
@@ -242,6 +261,7 @@ export const Alerts: React.FC<AlertsProps> = ({ role }) => {
   const startupCount = logs.filter(l => l.type === 'Startup').length;
 
   return (
+    <DataState loading={pageLoading} error={pageError} onRetry={fetchAlerts}>
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
       {/* Header Row */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -615,6 +635,7 @@ export const Alerts: React.FC<AlertsProps> = ({ role }) => {
       </Box>
 
     </Box>
+    </DataState>
   );
 };
 

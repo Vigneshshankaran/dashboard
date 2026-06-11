@@ -368,3 +368,80 @@ export interface ApiResponse<T = any> {
   data?: T;
   timestamp?: number;
 }
+
+// ─── Response shapes (what the backend RETURNS) ───────────────────────────────
+// The backend mixes snake_case and camelCase field names, so these types list
+// both variants. The index signature keeps them tolerant of extra fields.
+
+export interface AuthTokens {
+  access_token: string;
+  refresh_token?: string;
+  [key: string]: any;
+}
+
+export interface UserProfile {
+  id?: UUID;
+  userId?: UUID;
+  name?: string;
+  firstName?: string;
+  first_name?: string;
+  lastName?: string;
+  last_name?: string;
+  userName?: string;
+  username?: string;
+  email?: string;
+  primaryEmail?: string;
+  phoneNumber?: number | string;
+  phone_number?: number | string;
+  role?: UserRole;
+  status?: UserStatus;
+  active?: boolean;
+  [key: string]: any;
+}
+
+export interface SeniorSummary {
+  id?: UUID;
+  seniorId?: UUID;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  gender?: string;
+  dateOfBirth?: number;
+  bloodGroup?: string;
+  allergies?: string;
+  medicalConditions?: string;
+  [key: string]: any;
+}
+
+export interface DeviceSummary {
+  id?: UUID;
+  uuid?: UUID;
+  deviceUUID?: UUID;
+  deviceName?: string;
+  deviceIdentifier?: string;
+  imei?: string;
+  model?: string;
+  networkType?: string;
+  firmwareVersion?: string;
+  batteryLevel?: number;
+  status?: string;
+  [key: string]: any;
+}
+
+export interface AdminCounts {
+  totalUsers?: number;
+  totalSeniors?: number;
+  totalGuardians?: number;
+  totalMonitors?: number;
+  totalDevices?: number;
+  [key: string]: any;
+}
+
+export interface ComplianceReport {
+  id?: UUID;
+  reportName?: string;
+  reportType?: string;
+  reportUrl?: string;
+  seniorId?: UUID;
+  [key: string]: any;
+}

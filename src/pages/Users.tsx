@@ -28,6 +28,7 @@ import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
 import { AdminService } from '../api';
+import { DataState } from '../components/DataState';
 import type { UserRole } from '../api';
 
 
@@ -82,13 +83,19 @@ export const Users: React.FC = () => {
     MONITOR: { label: 'Monitors', color: '#F59E0B', count: users.filter(u => u.role === 'MONITOR').length },
   };
 
+  // Page load / error state
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+
   useEffect(() => {
     fetchUsers();
   }, []);
 
   const fetchUsers = () => {
+    setPageError(null);
     AdminService.adminGetUsers()
       .then((res) => {
+        setPageLoading(false);
         if (res) {
           const mapped: UserItem[] = res.map((u: any) => {
             const role = u.role as 'ADMIN' | 'GUARDIAN' | 'SENIOR' | 'MONITOR';
@@ -118,6 +125,8 @@ export const Users: React.FC = () => {
       })
       .catch((err) => {
         console.warn('Failed to load users from API:', err);
+        setPageLoading(false);
+        setPageError(err?.message || 'The server could not be reached. Please try again.');
       });
   };
 
@@ -218,6 +227,7 @@ export const Users: React.FC = () => {
   });
 
   return (
+    <DataState loading={pageLoading} error={pageError} onRetry={fetchUsers}>
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* Top Header */}
       <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'stretch', sm: 'flex-start' }, gap: { xs: 2, sm: 0 } }}>
@@ -1006,6 +1016,7 @@ export const Users: React.FC = () => {
         </DialogActions>
       </Dialog>
     </Box>
+    </DataState>
   );
 };
 export default Users;
