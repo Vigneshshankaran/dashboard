@@ -28,7 +28,6 @@ import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import AddIcon from '@mui/icons-material/Add';
 import BoltIcon from '@mui/icons-material/Bolt';
-import SyncIcon from '@mui/icons-material/Sync';
 import BlockIcon from '@mui/icons-material/Block';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -36,10 +35,8 @@ import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import PersonIcon from '@mui/icons-material/Person';
 import SmartphoneIcon from '@mui/icons-material/Smartphone';
 import CheckIcon from '@mui/icons-material/Check';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import { useEffect } from 'react';
-import { AdminService, DeviceService, DeviceAssignmentService } from '../api';
+import { AdminService, DeviceService, DeviceAssignmentService, DeviceStatusService } from '../api';
 import { DataState } from '../components/DataState';
 
 // Device item structure
@@ -84,6 +81,9 @@ export const Devices: React.FC = () => {
   // Health view state values
   const [thresholdSeconds, setThresholdSeconds] = useState('900');
   const [selectedHealthDevice, setSelectedHealthDevice] = useState('');
+  // null = not checked yet; [] = checked, all devices healthy
+  const [inactiveDevices, setInactiveDevices] = useState<{ id: string; name: string; imei: string; lastSeen: number }[] | null>(null);
+  const [inactiveLoading, setInactiveLoading] = useState(false);
 
   // Assignments view state values
   const [selectedAssignDevice, setSelectedAssignDevice] = useState('');
@@ -160,18 +160,27 @@ export const Devices: React.FC = () => {
     AdminService.adminGetAssignments()
       .then((res) => {
         if (res) {
-          const list: AssignmentItem[] = res.map((a: any) => ({
+          const list: AssignmentItem[] = res.map((a: any) => {
             // Real API flat fields: assignmentId, deviceId, deviceName, deviceIdentifier,
             // imei, seniorFirstName, seniorLastName, seniorPhone, status, assignedAt
-            id: a.assignmentId,
-            deviceUUID: a.deviceId,
-            deviceName: a.deviceName || a.deviceIdentifier || '—',
-            deviceImei: a.imei || a.deviceIdentifier || '—',
-            seniorName: `${a.seniorFirstName || ''} ${a.seniorLastName || ''}`.trim() || '—',
-            seniorPhone: a.seniorPhone ? String(a.seniorPhone) : '—',
-            status: 'ASSIGNED',
-            assignedAt: a.assignedAt || '—',
-          }));
+            let assignedAtStr = '—';
+            if (a.assignedAt) {
+              const dt = new Date(a.assignedAt);
+              if (!isNaN(dt.getTime())) {
+                assignedAtStr = dt.toLocaleString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+              }
+            }
+            return {
+              id: a.assignmentId,
+              deviceUUID: a.deviceId,
+              deviceName: a.deviceName || a.deviceIdentifier || '—',
+              deviceImei: a.imei || a.deviceIdentifier || '—',
+              seniorName: `${a.seniorFirstName || ''} ${a.seniorLastName || ''}`.trim() || '—',
+              seniorPhone: a.seniorPhone ? String(a.seniorPhone) : '—',
+              status: 'ASSIGNED',
+              assignedAt: assignedAtStr,
+            };
+          });
           setAssignments(list);
         }
       })
@@ -235,27 +244,28 @@ export const Devices: React.FC = () => {
       });
   };
 
-  // Toggle Block Status
-  const handleToggleBlock = (id: string) => {
+  // Revoke a device — one-way per the backend spec (there is no un-revoke)
+  const handleRevokeDevice = (id: string) => {
+    if (!window.confirm('Revoke this device? It will stop being able to send data. This cannot be undone.')) return;
     DeviceService.revokeDevice(id)
       .then(() => {
         fetchDevices();
       })
       .catch((err) => {
         console.error('Failed to revoke device in API:', err);
-        alert('Failed to revoke device in API.');
+        alert(`Revoke failed: ${err?.message || 'Unknown error from server'}`);
       });
   };
 
-  // Delete/Unlink Device
-  const handleDeleteDevice = (id: string) => {
-    DeviceService.revokeDevice(id)
+  // Rotate a device's credentials (POST /v1/devices/{uuid}/credentials/rotate)
+  const handleRotateCredentials = (id: string) => {
+    DeviceService.rotateDeviceCredentials(id)
       .then(() => {
-        fetchDevices();
+        alert('Device credentials rotated successfully.');
       })
       .catch((err) => {
-        console.error('Failed to delete device in API:', err);
-        alert('Failed to delete device in API.');
+        console.error('Failed to rotate device credentials in API:', err);
+        alert(`Credential rotation failed: ${err?.message || 'Unknown error from server'}`);
       });
   };
 
@@ -268,6 +278,39 @@ export const Devices: React.FC = () => {
       .catch((err) => {
         console.error('Failed to unassign device in API:', err);
         alert('Failed to unassign device in API.');
+      });
+  };
+
+  // Find devices that stopped reporting: compare each device's newest status
+  // event (GET /v1/device-status/all) against the chosen threshold.
+  const handleLoadInactive = () => {
+    setInactiveLoading(true);
+    DeviceStatusService.getAllDeviceStatuses()
+      .then((res) => {
+        setInactiveLoading(false);
+        const statuses = Array.isArray(res) ? res : res?.data ?? [];
+        const latestByDevice: Record<string, number> = {};
+        statuses.forEach((s: any) => {
+          const key = s.deviceUUID || s.ident;
+          if (!key || !s.timestamp) return;
+          const ts = String(s.timestamp).length === 10 ? s.timestamp * 1000 : Number(s.timestamp);
+          if (ts > (latestByDevice[key] || 0)) latestByDevice[key] = ts;
+        });
+        const cutoff = Date.now() - (Number(thresholdSeconds) || 900) * 1000;
+        const stale = devices
+          .map((d) => ({
+            id: d.id,
+            name: d.name,
+            imei: d.imei,
+            lastSeen: latestByDevice[d.id] || latestByDevice[d.imei] || 0,
+          }))
+          .filter((d) => d.lastSeen === 0 || d.lastSeen < cutoff);
+        setInactiveDevices(stale);
+      })
+      .catch((err) => {
+        setInactiveLoading(false);
+        console.warn('Failed to load device statuses from API:', err);
+        alert(`Could not load device statuses: ${err?.message || 'Unknown error from server'}`);
       });
   };
 
@@ -507,6 +550,8 @@ export const Devices: React.FC = () => {
                           <Box sx={{ display: 'flex', gap: 1 }}>
                             <IconButton
                               size="small"
+                              title="Rotate device credentials"
+                              onClick={() => handleRotateCredentials(device.id)}
                               sx={{
                                 color: '#1A0E07',
                                 border: '1px solid #EAE5E0',
@@ -523,41 +568,9 @@ export const Devices: React.FC = () => {
                             </IconButton>
                             <IconButton
                               size="small"
-                              sx={{
-                                color: '#1A0E07',
-                                border: '1px solid #EAE5E0',
-                                borderRadius: '6px',
-                                p: 0.75,
-                                '&:hover': {
-                                  backgroundColor: '#FAF8F6',
-                                  color: '#F59E0B',
-                                  borderColor: '#F59E0B',
-                                },
-                              }}
-                            >
-                              <SyncIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleToggleBlock(device.id)}
-                              sx={{
-                                color: '#1A0E07',
-                                border: '1px solid #EAE5E0',
-                                borderRadius: '6px',
-                                p: 0.75,
-                                backgroundColor: device.status === 'BLOCKED' ? '#F3F4F6' : 'transparent',
-                                '&:hover': {
-                                  backgroundColor: '#EAE5E0',
-                                  color: '#4B5563',
-                                  borderColor: '#9CA3AF',
-                                },
-                              }}
-                            >
-                              <BlockIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleDeleteDevice(device.id)}
+                              title="Revoke device (permanent)"
+                              onClick={() => handleRevokeDevice(device.id)}
+                              disabled={device.status === 'BLOCKED'}
                               sx={{
                                 color: '#1A0E07',
                                 border: '1px solid #EAE5E0',
@@ -570,7 +583,7 @@ export const Devices: React.FC = () => {
                                 },
                               }}
                             >
-                              <LinkOffIcon sx={{ fontSize: 16 }} />
+                              <BlockIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                           </Box>
                         </TableCell>
@@ -619,6 +632,8 @@ export const Devices: React.FC = () => {
               />
               <Button
                 variant="contained"
+                onClick={handleLoadInactive}
+                disabled={inactiveLoading}
                 sx={{
                   backgroundColor: '#FAF8F6',
                   color: '#1A0E07',
@@ -634,12 +649,33 @@ export const Devices: React.FC = () => {
                   },
                 }}
               >
-                Load Inactive
+                {inactiveLoading ? 'Checking...' : 'Load Inactive'}
               </Button>
             </Box>
-            <Typography variant="body2" sx={{ color: '#8C7E76', mt: 1 }}>
-              No inactive devices found.
-            </Typography>
+            {inactiveDevices === null ? (
+              <Typography variant="body2" sx={{ color: '#8C7E76', mt: 1 }}>
+                Set a threshold and click "Load Inactive" to find devices that have stopped reporting.
+              </Typography>
+            ) : inactiveDevices.length === 0 ? (
+              <Typography variant="body2" sx={{ color: '#10B981', fontWeight: 600, mt: 1 }}>
+                All devices reported within the last {thresholdSeconds} seconds.
+              </Typography>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
+                {inactiveDevices.map((d) => (
+                  <Box key={d.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.25, bgcolor: '#FFF1F2', borderRadius: '6px', border: '1px solid #FECDD3' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 650, color: '#9F1239' }}>
+                      {d.name}{d.imei !== '—' ? ` · ${d.imei}` : ''}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#9F1239' }}>
+                      {d.lastSeen
+                        ? `Last seen ${new Date(d.lastSeen).toLocaleString('en-US', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                        : 'Never reported'}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
           </Card>
 
           {/* Card 2: Device Health Lookup */}
@@ -758,13 +794,17 @@ export const Devices: React.FC = () => {
                     }}
                   >
                     <MenuItem value="" disabled>
-                      Choose an unassigned device...
+                      {devices.filter((d) => !getAssignedSenior(d)).length === 0
+                        ? 'All devices are already assigned'
+                        : 'Choose an unassigned device...'}
                     </MenuItem>
-                    {devices.map((device) => (
-                      <MenuItem key={device.id} value={device.id}>
-                        {device.name}
-                      </MenuItem>
-                    ))}
+                    {devices
+                      .filter((d) => !getAssignedSenior(d))
+                      .map((device) => (
+                        <MenuItem key={device.id} value={device.id}>
+                          {device.name} {device.imei !== '—' ? `(${device.imei})` : ''}
+                        </MenuItem>
+                      ))}
                   </Select>
                 </FormControl>
               </Box>
@@ -890,9 +930,6 @@ export const Devices: React.FC = () => {
                                 {assignment.deviceImei}
                               </Typography>
                             </Box>
-                            <IconButton size="small" sx={{ color: '#C2B8B2' }}>
-                              <InfoOutlinedIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
                           </Box>
                         </TableCell>
 
@@ -907,9 +944,6 @@ export const Devices: React.FC = () => {
                                 {assignment.seniorPhone}
                               </Typography>
                             </Box>
-                            <IconButton size="small" sx={{ color: '#C2B8B2' }}>
-                              <InfoOutlinedIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
                           </Box>
                         </TableCell>
 
@@ -936,24 +970,6 @@ export const Devices: React.FC = () => {
                         {/* Actions */}
                         <TableCell sx={{ py: 1.75 }}>
                           <Box sx={{ display: 'flex', gap: 1 }}>
-                            {/* File / Details Icon */}
-                            <IconButton
-                              size="small"
-                              sx={{
-                                color: '#1A0E07',
-                                border: '1px solid #EAE5E0',
-                                borderRadius: '6px',
-                                p: 0.75,
-                                '&:hover': {
-                                  backgroundColor: '#FAF8F6',
-                                  color: '#3B82F6',
-                                  borderColor: '#3B82F6',
-                                },
-                              }}
-                            >
-                              <DescriptionOutlinedIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-
                             {/* Unlink / Delete Assignment */}
                             <IconButton
                               size="small"
