@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -27,6 +27,10 @@ import EditIcon from '@mui/icons-material/Edit';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
+import { AdminService } from '../api';
+import { DataState } from '../components/DataState';
+import type { UserRole } from '../api';
+
 
 // User structure
 interface UserItem {
@@ -43,129 +47,7 @@ interface UserItem {
 
 export const Users: React.FC = () => {
   // Mock data of 11 users matching the screenshot
-  const [users, setUsers] = useState<UserItem[]>([
-    {
-      id: '1',
-      name: 'Ratnender Aarti',
-      username: 'ratnender.aarti.fa68',
-      email: 'aarti.ratnender@gmail.com',
-      phone: '7018232095',
-      role: 'GUARDIAN',
-      status: 'Active',
-      avatarBg: '#D1FAE5',
-      avatarColor: '#10B981',
-    },
-    {
-      id: '2',
-      name: 'Shravan Harishankar',
-      username: 'shravan.harishankar.0359',
-      email: '9003197571@healthsoft.in',
-      phone: '9003197571',
-      role: 'SENIOR',
-      status: 'Active',
-      avatarBg: '#DBEAFE',
-      avatarColor: '#3B82F6',
-    },
-    {
-      id: '3',
-      name: 'Seetharam S.',
-      username: 'seetharam.s.9146',
-      email: 'catchsee1qa@gmail.com',
-      phone: '9500001488',
-      role: 'GUARDIAN',
-      status: 'Active',
-      avatarBg: '#D1FAE5',
-      avatarColor: '#10B981',
-    },
-    {
-      id: '4',
-      name: 'KC Anand',
-      username: 'kc.anand.9366',
-      email: '9840074789@healthsoft.in',
-      phone: '9840074789',
-      role: 'SENIOR',
-      status: 'Active',
-      avatarBg: '#DBEAFE',
-      avatarColor: '#3B82F6',
-    },
-    {
-      id: '5',
-      name: 'Shravan H.',
-      username: 'shravan.harishankar.3783',
-      email: 'shravan.hari03@gmail.com',
-      phone: '9840374789',
-      role: 'MONITOR',
-      status: 'Active',
-      avatarBg: '#FEF3C7',
-      avatarColor: '#F59E0B',
-    },
-    {
-      id: '6',
-      name: 'KC Anand',
-      username: 'kc.anand.fb9c',
-      email: 'kcanand@healthsoft.in',
-      phone: '9840098400',
-      role: 'GUARDIAN',
-      status: 'Active',
-      avatarBg: '#D1FAE5',
-      avatarColor: '#10B981',
-    },
-    {
-      id: '7',
-      name: 'Dummy Senior',
-      username: 'dummy.senior.c97b',
-      email: '9317251535@healthsoft.in',
-      phone: '9317251535',
-      role: 'SENIOR',
-      status: 'Active',
-      avatarBg: '#DBEAFE',
-      avatarColor: '#3B82F6',
-    },
-    {
-      id: '8',
-      name: 'Healthsoft Admin Team',
-      username: 'healthsoft.monitor.dc16',
-      email: 'healthsoftcare@gmail.com',
-      phone: '1234512345',
-      role: 'ADMIN',
-      status: 'Active',
-      avatarBg: '#FCE7F3',
-      avatarColor: '#E11D48',
-    },
-    {
-      id: '9',
-      name: 'Ratnender Girri',
-      username: 'ratnender',
-      email: 'ratnendr.girri@gmail.com',
-      phone: '9317251526',
-      role: 'ADMIN',
-      status: 'Active',
-      avatarBg: '#FCE7F3',
-      avatarColor: '#E11D48',
-    },
-    {
-      id: '10',
-      name: 'Prasad K.',
-      username: 'prasad.k.2e70',
-      email: 'prkin.r@gmail.com',
-      phone: '9840727704',
-      role: 'MONITOR',
-      status: 'Active',
-      avatarBg: '#FEF3C7',
-      avatarColor: '#F59E0B',
-    },
-    {
-      id: '11',
-      name: 'YSK Kumar',
-      username: 'kushal.kumar.846e',
-      email: 'ktsushildev@gmail.com',
-      phone: '1234567890',
-      role: 'GUARDIAN',
-      status: 'Active',
-      avatarBg: '#D1FAE5',
-      avatarColor: '#10B981',
-    },
-  ]);
+  const [users, setUsers] = useState<UserItem[]>([]);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -182,6 +64,17 @@ export const Users: React.FC = () => {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'ADMIN' | 'GUARDIAN' | 'SENIOR' | 'MONITOR'>('SENIOR');
 
+  // Dialog State for Edit User
+  const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editRole, setEditRole] = useState<'ADMIN' | 'GUARDIAN' | 'SENIOR' | 'MONITOR'>('SENIOR');
+  const [editStatus, setEditStatus] = useState<'ACTIVE' | 'INACTIVE' | 'DEACTIVATED'>('ACTIVE');
+
   // Role details colors and counts mapping
   const roleMetadata = {
     ADMIN: { label: 'Admins', color: '#E11D48', count: users.filter(u => u.role === 'ADMIN').length },
@@ -190,48 +83,134 @@ export const Users: React.FC = () => {
     MONITOR: { label: 'Monitors', color: '#F59E0B', count: users.filter(u => u.role === 'MONITOR').length },
   };
 
+  // Page load / error state
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = () => {
+    setPageError(null);
+    AdminService.adminGetUsers()
+      .then((res) => {
+        setPageLoading(false);
+        if (res) {
+          const mapped: UserItem[] = res.map((u: any) => {
+            const role = u.role as 'ADMIN' | 'GUARDIAN' | 'SENIOR' | 'MONITOR';
+            let avatarBg = '#DBEAFE';
+            let avatarColor = '#3B82F6';
+            if (role === 'ADMIN') { avatarBg = '#FCE7F3'; avatarColor = '#E11D48'; }
+            else if (role === 'GUARDIAN') { avatarBg = '#D1FAE5'; avatarColor = '#10B981'; }
+            else if (role === 'MONITOR') { avatarBg = '#FEF3C7'; avatarColor = '#F59E0B'; }
+
+            const name = u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'User';
+
+            return {
+              id: u.id || u.userId || String(Math.random()),
+              name,
+              username: u.userName || u.username || '—',
+              email: u.primaryEmail || u.email || '—',
+              phone: u.phoneNumber ? String(u.phoneNumber) : '—',
+              role,
+              status: u.active || u.status === 'ACTIVE' ? 'Active' : 'Offline',
+              avatarBg,
+              avatarColor,
+              rawUser: u,
+            };
+          });
+          setUsers(mapped);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load users from API:', err);
+        setPageLoading(false);
+        setPageError(err?.message || 'The server could not be reached. Please try again.');
+      });
+  };
+
   // Add User handler
   const handleAddUser = () => {
     if (!firstName.trim() || !lastName.trim() || !role) return;
 
-    // Pick avatar colors based on role
-    let avatarBg = '#DBEAFE';
-    let avatarColor = '#3B82F6';
-    if (role === 'ADMIN') { avatarBg = '#FCE7F3'; avatarColor = '#E11D48'; }
-    else if (role === 'GUARDIAN') { avatarBg = '#D1FAE5'; avatarColor = '#10B981'; }
-    else if (role === 'MONITOR') { avatarBg = '#FEF3C7'; avatarColor = '#F59E0B'; }
+    AdminService.adminCreateUser({
+      role: role as UserRole,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      phoneNumber: Number(phone.trim().replace(/\D/g, '')) || 0,
+      email: email.trim(),
+      password: password.trim() || 'Password123!',
+    })
+      .then(() => {
+        fetchUsers();
+        setOpenAddDialog(false);
+        setFirstName('');
+        setLastName('');
+        setUsername('');
+        setPhone('');
+        setEmail('');
+        setPassword('');
+        setRole('SENIOR');
+      })
+      .catch((err) => {
+        console.error('Failed to create user in API:', err);
+        alert('Failed to create user in API.');
+      });
+  };
 
-    const fullName = `${firstName.trim()} ${lastName.trim()}`;
-    const generatedUsername = username.trim()
-      ? username.trim().replace(/^@/, '')
-      : `${firstName.trim().toLowerCase()}.${lastName.trim().toLowerCase()}.${Math.floor(1000 + Math.random() * 9000)}`;
+  // Edit User handlers
+  const handleStartEdit = (user: any) => {
+    const raw = user.rawUser || {};
+    setEditingUserId(user.id);
+    setEditFirstName(raw.firstName || user.name.split(' ')[0] || '');
+    setEditLastName(raw.lastName || user.name.split(' ').slice(1).join(' ') || '');
+    setEditUsername(user.username !== '—' ? user.username : '');
+    setEditPhone(user.phone !== '—' ? user.phone : '');
+    setEditEmail(user.email !== '—' ? user.email : '');
+    setEditRole(user.role);
+    setEditStatus(raw.status || (user.status === 'Active' ? 'ACTIVE' : 'DEACTIVATED'));
+    setOpenEditDialog(true);
+  };
 
-    const newUser: UserItem = {
-      id: Date.now().toString(),
-      name: fullName,
-      username: generatedUsername,
-      email: email.trim() || 'N/A',
-      phone: phone.trim() || 'N/A',
-      role: role,
-      status: 'Active',
-      avatarBg,
-      avatarColor,
+  const handleUpdateUser = () => {
+    if (!editingUserId || !editFirstName.trim() || !editLastName.trim() || !editRole) return;
+
+    const body = {
+      firstName: editFirstName.trim(),
+      lastName: editLastName.trim(),
+      userName: editUsername.trim() || `${editFirstName.trim().toLowerCase()}.${editLastName.trim().toLowerCase()}.${Math.random().toString(36).substring(2, 6)}`,
+      phoneNumber: Number(editPhone.trim().replace(/\D/g, '')) || 0,
+      primaryEmail: editEmail.trim(),
+      secondaryEmail: '',
+      profileImageUrl: '',
+      role: editRole,
+      status: editStatus,
+      active: editStatus === 'ACTIVE',
     };
 
-    setUsers((prev) => [...prev, newUser]);
-    setOpenAddDialog(false);
-    setFirstName('');
-    setLastName('');
-    setUsername('');
-    setPhone('');
-    setEmail('');
-    setPassword('');
-    setRole('SENIOR');
+    AdminService.adminUpdateUser(editingUserId, body)
+      .then(() => {
+        fetchUsers();
+        setOpenEditDialog(false);
+        setEditingUserId(null);
+      })
+      .catch((err) => {
+        console.error('Failed to update user in API:', err);
+        alert('Failed to update user in API.');
+      });
   };
 
   // Delete User handler
   const handleDeleteUser = (id: string) => {
-    setUsers((prev) => prev.filter((u) => u.id !== id));
+    AdminService.adminDeleteUser(id)
+      .then(() => {
+        fetchUsers();
+      })
+      .catch((err) => {
+        console.error('Failed to delete user in API:', err);
+        alert('Failed to delete user in API.');
+      });
   };
 
   // Filter logic
@@ -248,6 +227,7 @@ export const Users: React.FC = () => {
   });
 
   return (
+    <DataState loading={pageLoading} error={pageError} onRetry={fetchUsers}>
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* Top Header */}
       <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'stretch', sm: 'flex-start' }, gap: { xs: 2, sm: 0 } }}>
@@ -478,6 +458,7 @@ export const Users: React.FC = () => {
                     <Box sx={{ display: 'flex', gap: 1 }}>
                       {/* Edit (Black icon) */}
                       <IconButton
+                        onClick={() => handleStartEdit(user)}
                         size="small"
                         sx={{
                           color: '#1A0E07',
@@ -787,7 +768,255 @@ export const Users: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog 
+        open={openEditDialog} 
+        onClose={() => setOpenEditDialog(false)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '12px',
+              p: 1,
+            }
+          }
+        }}
+      >
+        {/* Custom Header with close button */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 3, pt: 2, pb: 1 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: '#1A0E07', fontSize: '1.25rem' }}>
+            Edit User
+          </Typography>
+          <IconButton 
+            onClick={() => setOpenEditDialog(false)} 
+            size="small" 
+            sx={{ 
+              color: '#8C7E76',
+              '&:hover': {
+                backgroundColor: 'rgba(0, 0, 0, 0.04)',
+              }
+            }}
+          >
+            <CloseIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </Box>
+
+        <DialogContent sx={{ px: 3, py: 2 }}>
+          <Box 
+            component="form" 
+            sx={{ 
+              display: 'grid', 
+              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, 
+              gap: 3 
+            }}
+          >
+            {/* First Name */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Typography sx={{ fontSize: '0.72rem', fontWeight: 800, color: '#8C7E76', letterSpacing: '0.5px' }}>
+                FIRST NAME *
+              </Typography>
+              <TextField
+                fullWidth
+                value={editFirstName}
+                onChange={(e) => setEditFirstName(e.target.value)}
+                size="small"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                    backgroundColor: '#FFFFFF',
+                    '& fieldset': { borderColor: '#EAE5E0' },
+                    '&:hover fieldset': { borderColor: '#4F46E5' },
+                    '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Last Name */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Typography sx={{ fontSize: '0.72rem', fontWeight: 800, color: '#8C7E76', letterSpacing: '0.5px' }}>
+                LAST NAME *
+              </Typography>
+              <TextField
+                fullWidth
+                value={editLastName}
+                onChange={(e) => setEditLastName(e.target.value)}
+                size="small"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                    backgroundColor: '#FFFFFF',
+                    '& fieldset': { borderColor: '#EAE5E0' },
+                    '&:hover fieldset': { borderColor: '#4F46E5' },
+                    '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Username */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Typography sx={{ fontSize: '0.72rem', fontWeight: 800, color: '#8C7E76', letterSpacing: '0.5px' }}>
+                USERNAME
+              </Typography>
+              <TextField
+                fullWidth
+                placeholder="@username"
+                value={editUsername}
+                onChange={(e) => setEditUsername(e.target.value)}
+                size="small"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                    backgroundColor: '#FFFFFF',
+                    '& fieldset': { borderColor: '#EAE5E0' },
+                    '&:hover fieldset': { borderColor: '#4F46E5' },
+                    '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Phone Number */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Typography sx={{ fontSize: '0.72rem', fontWeight: 800, color: '#8C7E76', letterSpacing: '0.5px' }}>
+                PHONE NUMBER
+              </Typography>
+              <TextField
+                fullWidth
+                placeholder="10-digit number"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+                size="small"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                    backgroundColor: '#FFFFFF',
+                    '& fieldset': { borderColor: '#EAE5E0' },
+                    '&:hover fieldset': { borderColor: '#4F46E5' },
+                    '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Email */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Typography sx={{ fontSize: '0.72rem', fontWeight: 800, color: '#8C7E76', letterSpacing: '0.5px' }}>
+                EMAIL
+              </Typography>
+              <TextField
+                fullWidth
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                size="small"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '8px',
+                    backgroundColor: '#FFFFFF',
+                    '& fieldset': { borderColor: '#EAE5E0' },
+                    '&:hover fieldset': { borderColor: '#4F46E5' },
+                    '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Status Select */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Typography sx={{ fontSize: '0.72rem', fontWeight: 800, color: '#8C7E76', letterSpacing: '0.5px' }}>
+                STATUS *
+              </Typography>
+              <Select
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value as any)}
+                size="small"
+                fullWidth
+                sx={{
+                  borderRadius: '8px',
+                  backgroundColor: '#FFFFFF',
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#EAE5E0' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' },
+                }}
+              >
+                <MenuItem value="ACTIVE">ACTIVE</MenuItem>
+                <MenuItem value="INACTIVE">INACTIVE</MenuItem>
+                <MenuItem value="DEACTIVATED">DEACTIVATED</MenuItem>
+              </Select>
+            </Box>
+
+            {/* Role select (half width column) */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Typography sx={{ fontSize: '0.72rem', fontWeight: 800, color: '#8C7E76', letterSpacing: '0.5px' }}>
+                ROLE *
+              </Typography>
+              <Select
+                value={editRole}
+                onChange={(e) => setEditRole(e.target.value as any)}
+                size="small"
+                fullWidth
+                sx={{
+                  borderRadius: '8px',
+                  backgroundColor: '#FFFFFF',
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#EAE5E0' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5' },
+                }}
+              >
+                <MenuItem value="SENIOR">SENIOR</MenuItem>
+                <MenuItem value="GUARDIAN">GUARDIAN</MenuItem>
+                <MenuItem value="MONITOR">MONITOR</MenuItem>
+                <MenuItem value="ADMIN">ADMIN</MenuItem>
+              </Select>
+            </Box>
+          </Box>
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, pb: 3, pt: 1, gap: 1.5 }}>
+          <Button 
+            onClick={() => setOpenEditDialog(false)} 
+            sx={{
+              borderRadius: '8px',
+              px: 3,
+              py: 1,
+              textTransform: 'none',
+              fontWeight: 700,
+              backgroundColor: '#EEF2FF',
+              color: '#4F46E5',
+              fontSize: '0.9rem',
+              '&:hover': {
+                backgroundColor: '#E0E7FF',
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleUpdateUser} 
+            variant="contained"
+            sx={{
+              borderRadius: '8px',
+              px: 3,
+              py: 1,
+              textTransform: 'none',
+              fontWeight: 700,
+              backgroundColor: '#4F46E5',
+              color: '#FFFFFF',
+              fontSize: '0.9rem',
+              '&:hover': {
+                backgroundColor: '#4338CA',
+              },
+            }}
+          >
+            Save Changes
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
+    </DataState>
   );
 };
 export default Users;

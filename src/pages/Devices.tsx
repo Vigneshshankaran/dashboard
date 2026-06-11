@@ -38,6 +38,9 @@ import SmartphoneIcon from '@mui/icons-material/Smartphone';
 import CheckIcon from '@mui/icons-material/Check';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import { useEffect } from 'react';
+import { AdminService, DeviceService, DeviceAssignmentService } from '../api';
+import { DataState } from '../components/DataState';
 
 // Device item structure
 interface DeviceItem {
@@ -65,92 +68,10 @@ interface AssignmentItem {
 
 export const Devices: React.FC = () => {
   // Mock data of devices matching screenshot
-  const [devices, setDevices] = useState<DeviceItem[]>([
-    {
-      id: '1',
-      name: 'Sushil Wrist Band',
-      imei: '—',
-      model: '—',
-      network: '—',
-      status: 'ACTIVE',
-      assignedToName: 'Sushil T.',
-      assignedToPhone: '8459221606',
-      battery: '—',
-    },
-    {
-      id: '2',
-      name: 'shravan',
-      imei: '861045082850739',
-      model: '—',
-      network: '4G',
-      status: 'ACTIVE',
-      assignedToName: 'Shravan Harishankar',
-      assignedToPhone: '9003197571',
-      battery: '55%',
-    },
-    {
-      id: '3',
-      name: 'testevwatch11766',
-      imei: '861045085111766',
-      model: 'EV-06',
-      network: '4G',
-      status: 'ACTIVE',
-      assignedToName: 'Shravan Harishankar',
-      assignedToPhone: '9003197571',
-      battery: '0%',
-    },
-    {
-      id: '4',
-      name: 'Testeviewgps25576',
-      imei: '861045005125576',
-      model: 'EV07BA',
-      network: '4G',
-      status: 'ACTIVE',
-      assignedToName: 'Sushil T.',
-      assignedToPhone: '8459221606',
-      battery: '3%',
-    },
-  ]);
+  const [devices, setDevices] = useState<DeviceItem[]>([]);
 
   // Pre-populated assignments matching screenshot
-  const [assignments, setAssignments] = useState<AssignmentItem[]>([
-    {
-      id: 'a1',
-      deviceName: 'shravan',
-      deviceImei: '861045082850739',
-      seniorName: 'Shravan Harishankar',
-      seniorPhone: '9003197571',
-      status: 'ASSIGNED',
-      assignedAt: '05 Sept, 03:59 pm',
-    },
-    {
-      id: 'a2',
-      deviceName: 'Testeviewgps25576',
-      deviceImei: '861045005125576',
-      seniorName: 'Sushil T.',
-      seniorPhone: '8459221606',
-      status: 'ASSIGNED',
-      assignedAt: '18 Feb, 06:21 pm',
-    },
-    {
-      id: 'a3',
-      deviceName: 'testevwatch11766',
-      deviceImei: '861045085111766',
-      seniorName: 'Shravan Harishankar',
-      seniorPhone: '9003197571',
-      status: 'ASSIGNED',
-      assignedAt: '23 Aug, 09:02 am',
-    },
-    {
-      id: 'a4',
-      deviceName: 'Sushil Wrist Band',
-      deviceImei: '—',
-      seniorName: 'Sushil T.',
-      seniorPhone: '8459221606',
-      status: 'ASSIGNED',
-      assignedAt: '02 May, 12:52 pm',
-    },
-  ]);
+  const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
 
   // Tab State
   const [activeSubTab, setActiveSubTab] = useState(0);
@@ -191,73 +112,149 @@ export const Devices: React.FC = () => {
     setNewDeviceNetwork('');
   };
 
+  // Page load / error state
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+
+  // Load devices and assignments from API
+  useEffect(() => {
+    fetchDevices();
+    fetchAssignments();
+  }, []);
+
+  const fetchDevices = () => {
+    setPageError(null);
+    AdminService.adminGetDevices()
+      .then((res) => {
+        setPageLoading(false);
+        if (res) {
+          const list: DeviceItem[] = res.map((d: any) => ({
+            id: d.uuid || d.id || String(d.deviceTypeId || Math.random()),
+            name: d.deviceName || d.name || 'Unnamed Device',
+            imei: d.imei || d.deviceIdentifier || '—',
+            model: d.model || '—',
+            network: d.networkType || '—',
+            status: d.status === 'BLOCKED' ? 'BLOCKED' : 'ACTIVE',
+            assignedToName: d.assignedToName || '—',
+            assignedToPhone: d.assignedToPhone || '—',
+            battery: d.batteryLevel !== undefined ? `${d.batteryLevel}%` : '—',
+          }));
+          setDevices(list);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to fetch devices from API:', err);
+        setPageLoading(false);
+        setPageError(err?.message || 'The server could not be reached. Please try again.');
+      });
+  };
+
+  const fetchAssignments = () => {
+    AdminService.adminGetAssignments()
+      .then((res) => {
+        if (res) {
+          const list: AssignmentItem[] = res.map((a: any) => ({
+            id: a.id || a.assignmentId || String(Math.random()),
+            deviceName: a.deviceName || a.deviceUUID || 'Device',
+            deviceImei: a.deviceImei || '—',
+            seniorName: a.seniorName || 'Senior',
+            seniorPhone: a.seniorPhone || '—',
+            status: 'ASSIGNED',
+            assignedAt: a.assignedAt || '—',
+          }));
+          setAssignments(list);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to fetch assignments from API:', err);
+      });
+  };
+
   // Register Device Handler
   const handleRegisterDevice = () => {
     if (!newDeviceName.trim()) return;
 
-    const newDevice: DeviceItem = {
-      id: Date.now().toString(),
-      name: newDeviceName.trim(),
-      imei: newDeviceImei.trim() || '—',
-      model: newDeviceModel.trim() || '—',
-      network: newDeviceNetwork.trim() || '—',
-      status: 'ACTIVE',
-      assignedToName: '—',
-      assignedToPhone: '—',
-      battery: '—',
+    const payload = {
+      deviceIdentifier: newDeviceImei.trim() || newDeviceIdentifier.trim() || String(Date.now()),
+      deviceName: newDeviceName.trim(),
+      module: newDeviceModel.trim() || 'EV-06',
+      iccid: '',
+      mac: newDeviceMacAddress.trim(),
+      model: newDeviceModel.trim(),
+      deviceTypeId: '1',
+      deviceType: 'Wearable',
+      firmwareVersion: newDeviceFirmware.trim() || 'v1.0.0',
+      networkType: newDeviceNetwork.trim() || '4G',
+      serverTimestamp: Date.now(),
+      imei: newDeviceImei.trim(),
     };
 
-    setDevices((prev) => [...prev, newDevice]);
-    handleCloseRegisterDialog();
+    DeviceService.registerDevice(payload)
+      .then(() => {
+        fetchDevices();
+        handleCloseRegisterDialog();
+      })
+      .catch((err) => {
+        console.error('Failed to register device in API:', err);
+        alert('Failed to register device in API.');
+      });
   };
 
   // Assign Device to Senior Handler
   const handleAssignDevice = () => {
     if (!selectedAssignDevice || !selectedAssignSenior) return;
 
-    const targetDevice = devices.find((d) => d.id === selectedAssignDevice);
-    if (!targetDevice) return;
-
-    const seniorName = selectedAssignSenior;
-    // Generate simple dummy phone
-    const seniorPhone = seniorName === 'Shravan Harishankar' ? '9003197571' : '8459221606';
-
-    const newAssignment: AssignmentItem = {
-      id: Date.now().toString(),
-      deviceName: targetDevice.name,
-      deviceImei: targetDevice.imei,
-      seniorName: seniorName,
-      seniorPhone: seniorPhone,
-      status: 'ASSIGNED',
-      assignedAt: 'Just now',
+    const payload = {
+      deviceUUID: selectedAssignDevice,
+      seniorUUID: selectedAssignSenior,
     };
 
-    setAssignments((prev) => [newAssignment, ...prev]);
-    setSelectedAssignDevice('');
-    setSelectedAssignSenior('');
+    DeviceAssignmentService.assignDevice(payload)
+      .then(() => {
+        fetchAssignments();
+        setSelectedAssignDevice('');
+        setSelectedAssignSenior('');
+      })
+      .catch((err) => {
+        console.error('Failed to assign device in API:', err);
+        alert('Failed to assign device in API.');
+      });
   };
 
   // Toggle Block Status
   const handleToggleBlock = (id: string) => {
-    setDevices((prev) =>
-      prev.map((d) => {
-        if (d.id === id) {
-          const newStatus = d.status === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE';
-          return { ...d, status: newStatus };
-        }
-        return d;
+    DeviceService.revokeDevice(id)
+      .then(() => {
+        fetchDevices();
       })
-    );
+      .catch((err) => {
+        console.error('Failed to revoke device in API:', err);
+        alert('Failed to revoke device in API.');
+      });
   };
 
   // Delete/Unlink Device
   const handleDeleteDevice = (id: string) => {
-    setDevices((prev) => prev.filter((d) => d.id !== id));
+    DeviceService.revokeDevice(id)
+      .then(() => {
+        fetchDevices();
+      })
+      .catch((err) => {
+        console.error('Failed to delete device in API:', err);
+        alert('Failed to delete device in API.');
+      });
   };
 
   // Unlink/Delete Assignment
   const handleDeleteAssignment = (id: string) => {
-    setAssignments((prev) => prev.filter((a) => a.id !== id));
+    DeviceAssignmentService.unassignDevice(id, { assignmentId: id, reason: 'Unlinked by Admin' })
+      .then(() => {
+        fetchAssignments();
+      })
+      .catch((err) => {
+        console.error('Failed to unassign device in API:', err);
+        alert('Failed to unassign device in API.');
+      });
   };
 
   // Filter list by IMEI lookup
@@ -273,6 +270,7 @@ export const Devices: React.FC = () => {
   const selectedDeviceDetails = devices.find((d) => d.id === selectedHealthDevice);
 
   return (
+    <DataState loading={pageLoading} error={pageError} onRetry={() => { fetchDevices(); fetchAssignments(); }}>
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
       {/* Page Title & Register Button */}
       <Box
@@ -666,24 +664,24 @@ export const Devices: React.FC = () => {
                 </Box>
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 2 }}>
                   <Box>
-                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 600 }}>CELLULAR SIGNAL</Typography>
+                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 600 }}>NETWORK</Typography>
                     <Typography variant="body2" sx={{ fontWeight: 700, color: '#1A0E07' }}>
-                      {selectedDeviceDetails.network !== '—' ? '🟢 Strong (94% RSSI)' : '🔴 Offline'}
+                      {selectedDeviceDetails.network !== '—' ? `🟢 ${selectedDeviceDetails.network}` : '🔴 Unknown'}
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 600 }}>BATTERY HEALTH</Typography>
+                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 600 }}>BATTERY</Typography>
                     <Typography variant="body2" sx={{ fontWeight: 700, color: '#1A0E07' }}>
-                      {selectedDeviceDetails.battery !== '—' ? `${selectedDeviceDetails.battery} (Good)` : '—'}
+                      {selectedDeviceDetails.battery !== '—' ? selectedDeviceDetails.battery : '—'}
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 600 }}>LAST REFRESH TIMESTAMP</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#1A0E07' }}>Just now</Typography>
+                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 600 }}>STATUS</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#1A0E07' }}>{selectedDeviceDetails.status || '—'}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 600 }}>GEOLOCATION LOCK</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#1A0E07' }}>🟢 Connected (GPS Locked)</Typography>
+                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 600 }}>MODEL</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#1A0E07' }}>{selectedDeviceDetails.model || '—'}</Typography>
                   </Box>
                 </Box>
               </Box>
@@ -1241,6 +1239,7 @@ export const Devices: React.FC = () => {
         </DialogActions>
       </Dialog>
     </Box>
+    </DataState>
   );
 };
 export default Devices;

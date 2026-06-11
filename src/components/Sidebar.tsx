@@ -22,7 +22,6 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import CloudQueueIcon from '@mui/icons-material/CloudQueue';
-import SettingsIcon from '@mui/icons-material/Settings';
 
 interface SidebarProps {
   activeTab: string;
@@ -36,6 +35,7 @@ interface SidebarProps {
   };
   desktopCollapsed?: boolean;
   onDesktopCollapseToggle?: () => void;
+  onLogout: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -44,6 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   profile,
   desktopCollapsed = false,
   onDesktopCollapseToggle,
+  onLogout,
 }) => {
   const menuGroups = [
     {
@@ -71,11 +72,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'ACCOUNT',
       items: [
-        { id: 'settings', text: 'Settings', icon: <SettingsIcon /> },
         { id: 'profile', text: 'My Profile', icon: <PersonIcon /> },
       ],
     },
   ];
+
+  const getFilteredGroups = () => {
+    const isClientAdmin = profile.role === 'ADMIN';
+    return menuGroups.map(group => {
+      let filteredItems = group.items;
+      if (!isClientAdmin) {
+        filteredItems = group.items.filter(item => 
+          item.id !== 'users' && 
+          item.id !== 'devices' && 
+          item.id !== 'guardians' && 
+          item.id !== 'monitors'
+        );
+      }
+      return { ...group, items: filteredItems };
+    }).filter(group => group.items.length > 0);
+  };
 
   return (
     <Box
@@ -150,7 +166,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation Menus with Group Categories */}
       <Box sx={{ flexGrow: 1, px: desktopCollapsed ? 1 : 2, mt: 1, overflowY: 'auto' }}>
-        {menuGroups.map((group) => (
+        {getFilteredGroups().map((group) => (
           <Box key={group.title} sx={{ mb: desktopCollapsed ? 1.5 : 2.5 }}>
             {!desktopCollapsed && (
               <Typography
@@ -262,6 +278,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Logout Button */}
         <ListItemButton
+          onClick={onLogout}
           sx={{
             borderRadius: '8px',
             color: '#B8A8A0',

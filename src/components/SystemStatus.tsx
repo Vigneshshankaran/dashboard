@@ -1,7 +1,83 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Typography, Box, Chip, Divider } from '@mui/material';
+import { ActuatorService, AdminService, SeniorService, AlarmService } from '../api';
 
-export const SystemStatus: React.FC = () => {
+interface SystemStatusProps {
+  role?: string;
+}
+
+export const SystemStatus: React.FC<SystemStatusProps> = ({ role }) => {
+  const [platformStatus, setPlatformStatus] = useState<string>('Offline');
+  const [counts, setCounts] = useState({
+    seniors: 0,
+    guardians: 0,
+    monitors: 0,
+    admins: 0,
+    devices: 0,
+    approvals: 0,
+    alarms: 0,
+  });
+
+  useEffect(() => {
+    // 1. Fetch Actuator Health
+    ActuatorService.getHealth()
+      .then((res) => {
+        if (res && (res.status === 'UP' || res.status === 'Operational')) {
+          setPlatformStatus('Operational');
+        } else {
+          setPlatformStatus('Degraded');
+        }
+      })
+      .catch(() => {
+        setPlatformStatus('Offline');
+      });
+
+    // 2. Fetch counts
+    const isClientAdmin = role === 'ADMIN';
+
+    if (isClientAdmin) {
+      AdminService.adminGetCounts()
+        .then((res) => {
+          if (res) {
+            setCounts({
+              seniors: res.totalSeniors ?? res.seniors ?? 0,
+              guardians: res.totalGuardians ?? res.guardians ?? 0,
+              monitors: res.totalMonitors ?? res.monitors ?? 0,
+              admins: res.totalAdmins ?? res.admins ?? 0,
+              devices: res.totalDevices ?? res.devices ?? 0,
+              approvals: res.pendingMappings ?? res.approvals ?? 0,
+              alarms: res.totalAlerts ?? res.alarms ?? 0,
+            });
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load system status counts:', err);
+        });
+    } else {
+      // Fetch user-level personal counts
+      Promise.all([
+        SeniorService.getMySeniors().catch(() => []),
+        SeniorService.getMyGuardians().catch(() => []),
+        SeniorService.getMyMonitors().catch(() => []),
+        AlarmService.getAllAlarms().catch(() => []),
+      ])
+        .then(([seniors, guardians, monitors, alarms]) => {
+          setCounts({
+            seniors: seniors.length,
+            guardians: guardians.length,
+            monitors: monitors.length,
+            admins: 0,
+            devices: seniors.reduce((acc: number, s: any) => acc + (s.devicesCount || 0), 0),
+            approvals: 0,
+            alarms: alarms.length,
+          });
+        })
+        .catch((err) => {
+          console.error('Failed to load user system status counts:', err);
+        });
+    }
+  }, [role]);
+
   return (
     <Card sx={{ height: '100%' }}>
       {/* Card Header with Live indicator */}
@@ -60,11 +136,11 @@ export const SystemStatus: React.FC = () => {
             Platform
           </Typography>
           <Chip
-            label="Operational"
+            label={platformStatus}
             size="small"
             sx={{
-              backgroundColor: '#ECFDF5',
-              color: '#10B981',
+              backgroundColor: platformStatus === 'Operational' ? '#ECFDF5' : '#FFF1F2',
+              color: platformStatus === 'Operational' ? '#10B981' : '#EF4444',
               fontWeight: 700,
               fontSize: '0.75rem',
               borderRadius: '6px',
@@ -79,7 +155,7 @@ export const SystemStatus: React.FC = () => {
             User Coverage
           </Typography>
           <Typography variant="body2" sx={{ color: '#1A0E07', fontWeight: 600 }}>
-            4 seniors - 4 guardians - 2 monitors - 2 admins
+            {counts.seniors} seniors - {counts.guardians} guardians - {counts.monitors} monitors - {counts.admins} admins
           </Typography>
         </Box>
         <Divider sx={{ borderColor: '#F5F2EF' }} />
@@ -90,7 +166,7 @@ export const SystemStatus: React.FC = () => {
             Device Fleet
           </Typography>
           <Typography variant="body2" sx={{ color: '#1A0E07', fontWeight: 600 }}>
-            4 registered
+            {counts.devices} registered
           </Typography>
         </Box>
         <Divider sx={{ borderColor: '#F5F2EF' }} />
@@ -101,11 +177,11 @@ export const SystemStatus: React.FC = () => {
             Pending Approvals
           </Typography>
           <Chip
-            label="None"
+            label={counts.approvals > 0 ? `${counts.approvals} pending` : 'None'}
             size="small"
             sx={{
-              backgroundColor: '#ECFDF5',
-              color: '#10B981',
+              backgroundColor: counts.approvals > 0 ? '#FFFBEB' : '#ECFDF5',
+              color: counts.approvals > 0 ? '#D97706' : '#10B981',
               fontWeight: 700,
               fontSize: '0.75rem',
               borderRadius: '6px',
@@ -120,11 +196,11 @@ export const SystemStatus: React.FC = () => {
             Active Alarms
           </Typography>
           <Chip
-            label="73 events"
+            label={`${counts.alarms} events`}
             size="small"
             sx={{
-              backgroundColor: '#FEF2F2',
-              color: '#EF4444',
+              backgroundColor: counts.alarms > 0 ? '#FEF2F2' : '#ECFDF5',
+              color: counts.alarms > 0 ? '#EF4444' : '#10B981',
               fontWeight: 700,
               fontSize: '0.75rem',
               borderRadius: '6px',
@@ -135,3 +211,4 @@ export const SystemStatus: React.FC = () => {
     </Card>
   );
 };
+export default SystemStatus;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -22,6 +22,9 @@ import {
 } from '@mui/material';
 import LinkIcon from '@mui/icons-material/Link'; // Chain link icon for Assign Monitor
 import LinkOffIcon from '@mui/icons-material/LinkOff'; // Revoke unlink icon
+import { AdminService, MonitorService } from '../api';
+import { DataState } from '../components/DataState';
+
 
 // Monitor assignment structure
 interface MonitorAssignmentItem {
@@ -36,89 +39,7 @@ interface MonitorAssignmentItem {
 
 export const Monitors: React.FC = () => {
   // Pre-populated monitor assignments matching screenshot
-  const [assignments, setAssignments] = useState<MonitorAssignmentItem[]>([
-    {
-      id: 'a1',
-      seniorName: 'Sushil T.',
-      seniorEmail: '8459221606@healthsoft.in',
-      seniorPhone: '8459221606',
-      monitorName: 'Healthsoft Admin Team',
-      monitorEmail: 'healthsoftcare@gmail.com',
-      createdDate: 'May 24, 2026',
-    },
-    {
-      id: 'a2',
-      seniorName: 'Sushil T.',
-      seniorEmail: '8459221606@healthsoft.in',
-      seniorPhone: '8459221606',
-      monitorName: 'Shravan H.',
-      monitorEmail: 'shravan.hari03@gmail.com',
-      createdDate: 'May 24, 2026',
-    },
-    {
-      id: 'a3',
-      seniorName: 'Sushil T.',
-      seniorEmail: '8459221606@healthsoft.in',
-      seniorPhone: '8459221606',
-      monitorName: 'Prasad K.',
-      monitorEmail: 'prkin@gmail.com',
-      createdDate: 'May 24, 2026',
-    },
-    {
-      id: 'a4',
-      seniorName: 'Shravan Harishankar',
-      seniorEmail: '9003197571@healthsoft.in',
-      seniorPhone: '9003197571',
-      monitorName: 'Healthsoft Admin Team',
-      monitorEmail: 'healthsoftcare@gmail.com',
-      createdDate: 'May 24, 2026',
-    },
-    {
-      id: 'a5',
-      seniorName: 'Shravan Harishankar',
-      seniorEmail: '9003197571@healthsoft.in',
-      seniorPhone: '9003197571',
-      monitorName: 'Shravan H.',
-      monitorEmail: 'shravan.hari03@gmail.com',
-      createdDate: 'May 24, 2026',
-    },
-    {
-      id: 'a6',
-      seniorName: 'Shravan Harishankar',
-      seniorEmail: '9003197571@healthsoft.in',
-      seniorPhone: '9003197571',
-      monitorName: 'Prasad K.',
-      monitorEmail: 'prkin@gmail.com',
-      createdDate: 'May 24, 2026',
-    },
-    {
-      id: 'a7',
-      seniorName: 'KC Anand',
-      seniorEmail: '9840074789@healthsoft.in',
-      seniorPhone: '9840074789',
-      monitorName: 'Healthsoft Admin Team',
-      monitorEmail: 'healthsoftcare@gmail.com',
-      createdDate: 'May 24, 2026',
-    },
-    {
-      id: 'a8',
-      seniorName: 'KC Anand',
-      seniorEmail: '9840074789@healthsoft.in',
-      seniorPhone: '9840074789',
-      monitorName: 'Shravan H.',
-      monitorEmail: 'shravan.hari03@gmail.com',
-      createdDate: 'May 24, 2026',
-    },
-    {
-      id: 'a9',
-      seniorName: 'KC Anand',
-      seniorEmail: '9840074789@healthsoft.in',
-      seniorPhone: '9840074789',
-      monitorName: 'Prasad K.',
-      monitorEmail: 'prkin@gmail.com',
-      createdDate: 'May 24, 2026',
-    },
-  ]);
+  const [assignments, setAssignments] = useState<MonitorAssignmentItem[]>([]);
 
   // Search and filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -131,31 +52,73 @@ export const Monitors: React.FC = () => {
   const [assignMonitorName, setAssignMonitorName] = useState('');
   const [assignMonitorEmail, setAssignMonitorEmail] = useState('');
 
+  // Page load / error state
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchMonitorAssignments();
+  }, []);
+
+  const fetchMonitorAssignments = () => {
+    setPageError(null);
+    AdminService.adminGetMonitorMappings()
+      .then((res) => {
+        setPageLoading(false);
+        if (res) {
+          const list: MonitorAssignmentItem[] = res.map((m: any) => ({
+            id: m.id || m.mappingId || String(Math.random()),
+            seniorName: m.seniorName || 'Senior',
+            seniorEmail: m.seniorEmail || '—',
+            seniorPhone: m.seniorPhone || '—',
+            monitorName: m.monitorName || 'Monitor',
+            monitorEmail: m.monitorEmail || '—',
+            createdDate: m.createdDate || m.date || '—',
+          }));
+          setAssignments(list);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to fetch monitor assignments from API:', err);
+        setPageLoading(false);
+        setPageError(err?.message || 'The server could not be reached. Please try again.');
+      });
+  };
+
   // Revoke handler
   const handleRevoke = (id: string) => {
-    setAssignments((prev) => prev.filter((a) => a.id !== id));
+    MonitorService.deleteMonitorMapping(id)
+      .then(() => {
+        fetchMonitorAssignments();
+      })
+      .catch((err) => {
+        console.error('Failed to revoke monitor mapping from API:', err);
+        alert('Failed to revoke monitor mapping from API.');
+      });
   };
 
   // Add Assignment handler
   const handleAssignMonitor = () => {
     if (!assignSeniorName.trim() || !assignMonitorName.trim()) return;
 
-    const newAssignment: MonitorAssignmentItem = {
-      id: Date.now().toString(),
-      seniorName: assignSeniorName.trim(),
-      seniorEmail: assignSeniorEmail.trim() || `${assignSeniorName.toLowerCase().replace(/\s+/g, '')}@healthsoft.in`,
-      seniorPhone: '9840055555',
-      monitorName: assignMonitorName.trim(),
-      monitorEmail: assignMonitorEmail.trim() || `${assignMonitorName.toLowerCase().replace(/\s+/g, '')}@gmail.com`,
-      createdDate: 'May 24, 2026',
+    const payload = {
+      seniorId: assignSeniorName.trim(),
+      monitorId: assignMonitorName.trim(),
     };
 
-    setAssignments((prev) => [...prev, newAssignment]);
-    setOpenAssignDialog(false);
-    setAssignSeniorName('');
-    setAssignSeniorEmail('');
-    setAssignMonitorName('');
-    setAssignMonitorEmail('');
+    MonitorService.assignMonitor(payload)
+      .then(() => {
+        fetchMonitorAssignments();
+        setOpenAssignDialog(false);
+        setAssignSeniorName('');
+        setAssignSeniorEmail('');
+        setAssignMonitorName('');
+        setAssignMonitorEmail('');
+      })
+      .catch((err) => {
+        console.error('Failed to assign monitor in API:', err);
+        alert('Failed to assign monitor in API.');
+      });
   };
 
   // Filter list
@@ -203,6 +166,7 @@ export const Monitors: React.FC = () => {
   const uniqueSeniorsCount = Array.from(new Set(assignments.map((a) => a.seniorName))).length;
 
   return (
+    <DataState loading={pageLoading} error={pageError} onRetry={fetchMonitorAssignments}>
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
       {/* Top Header */}
       <Box
@@ -463,6 +427,7 @@ export const Monitors: React.FC = () => {
         </DialogActions>
       </Dialog>
     </Box>
+    </DataState>
   );
 };
 export default Monitors;

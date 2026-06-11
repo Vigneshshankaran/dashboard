@@ -1,3 +1,14 @@
+/**
+ * client.ts — the "telephone" that talks to the backend server.
+ *
+ * One shared `request()` function handles everything every API call needs:
+ *  - prefixes the backend address (VITE_API_BASE_URL from .env)
+ *  - attaches your login token (unless `skipAuth` is set)
+ *  - serializes JSON bodies and query parameters
+ *  - turns bad responses into a typed ApiError
+ *
+ * The `client` object below is just a shorthand for the 5 HTTP verbs.
+ */
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || '';
 
 export class ApiError extends Error {
@@ -20,7 +31,51 @@ interface RequestOptions {
   skipAuth?: boolean;
 }
 
-export async function request<T = any>(path: string, options: RequestOptions = {}): Promise<T> {
+// ─── Automatic token refresh ──────────────────────────────────────────────────
+// When the access token expires (HTTP 401), we silently exchange the refresh
+// token for a new one and retry the request — the user never gets kicked out
+// mid-session. If the refresh itself fails, we broadcast 'auth:expired' so the
+// app can return to the login screen cleanly.
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function tryRefreshToken(): Promise<boolean> {
+  const refreshToken = localStorage.getItem('refreshToken');
+  if (!refreshToken) return false;
+
+  // Single-flight: if several requests hit 401 at once, refresh only once
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(`${BASE_URL}/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', refreshToken },
+    })
+      .then(async (res) => {
+        if (!res.ok) return false;
+        const data = await res.json().catch(() => null);
+        const payload = data?.data ?? data;
+        const newAccess = payload?.access_token;
+        if (!newAccess) return false;
+        localStorage.setItem('authToken', newAccess);
+        if (payload?.refresh_token) {
+          localStorage.setItem('refreshToken', payload.refresh_token);
+        }
+        return true;
+      })
+      .catch(() => false)
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
+function notifySessionExpired() {
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('refreshToken');
+  window.dispatchEvent(new Event('auth:expired'));
+}
+
+export async function request<T = any>(path: string, options: RequestOptions = {}, isRetry = false): Promise<T> {
   const { method = 'GET', headers = {}, body, queryParams, skipAuth = false } = options;
 
   // Set up headers
@@ -73,30 +128,30 @@ export async function request<T = any>(path: string, options: RequestOptions = {
 
   const response = await fetch(url, init);
 
-  if (!response.ok) {
-    let errorData: any;
-    try {
-      errorData = await response.json();
-    } catch {
-      errorData = await response.text();
+  // Access token expired? Refresh once and retry the original request.
+  if (response.status === 401 && !skipAuth && !isRetry) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      return request<T>(path, options, true);
     }
-    const errorMessage = errorData?.message || errorData || `HTTP error! status: ${response.status}`;
-    throw new ApiError(errorMessage, response.status, errorData);
+    notifySessionExpired();
   }
 
-  // Check if response is empty
-  const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
-    return response.json() as Promise<T>;
-  }
-
-  // Return text or generic success
   const text = await response.text();
+
+  let data: any;
   try {
-    return JSON.parse(text) as T;
+    data = text ? JSON.parse(text) : null;
   } catch {
-    return text as unknown as T;
+    data = text;
   }
+
+  if (!response.ok) {
+    const errorMessage = data?.message || data || `HTTP error! status: ${response.status}`;
+    throw new ApiError(errorMessage, response.status, data);
+  }
+
+  return data as T;
 }
 
 export const client = {

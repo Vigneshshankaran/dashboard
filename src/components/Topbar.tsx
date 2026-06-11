@@ -6,17 +6,14 @@ import {
   IconButton,
   Menu,
   MenuItem,
-  Button, // Added Button for seniors header actions
 } from '@mui/material';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import MenuIcon from '@mui/icons-material/Menu';
-import EditIcon from '@mui/icons-material/Edit'; // Added EditIcon
-import AddIcon from '@mui/icons-material/Add'; // Added AddIcon
 
 interface TopbarProps {
   title: string;
-  activeTab?: string; // Added activeTab prop
   onMobileMenuToggle: () => void;
+  onNavigate: (tab: string) => void;
   profile: {
     name: string;
     email: string;
@@ -25,9 +22,10 @@ interface TopbarProps {
     avatarBg: string;
   };
   desktopCollapsed?: boolean;
+  onLogout: () => void;
 }
 
-export const Topbar: React.FC<TopbarProps> = ({ title, activeTab, onMobileMenuToggle, profile, desktopCollapsed }) => {
+export const Topbar: React.FC<TopbarProps> = ({ title, onMobileMenuToggle, onNavigate, profile, desktopCollapsed, onLogout }) => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -72,119 +70,16 @@ export const Topbar: React.FC<TopbarProps> = ({ title, activeTab, onMobileMenuTo
           <MenuIcon />
         </IconButton>
 
-        {activeTab === 'seniors' ? (
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', mr: { xs: 0, md: 4 } }}>
-            {/* Breadcrumb Title */}
-            <Typography
-              variant="h6"
-              sx={{
-                color: '#FFFFFF',
-                fontWeight: 700,
-                fontSize: { xs: '0.85rem', sm: '1.05rem' },
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.5,
-              }}
-            >
-              <Box component="span" sx={{ color: '#8C7E76', fontWeight: 500 }}>— Seniors</Box>
-              <Box component="span" sx={{ color: '#FFFFFF' }}>/ Meena Devi</Box>
-            </Typography>
-
-            {/* Seniors Top Actions */}
-            <Box sx={{ display: { xs: 'none', lg: 'flex' }, alignItems: 'center', gap: 1.5 }}>
-              <Button
-                variant="outlined"
-                size="small"
-                sx={{
-                  color: '#B8A8A0',
-                  borderColor: 'rgba(255,255,255,0.15)',
-                  fontSize: '0.75rem',
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  py: 0.5,
-                  px: 1.5,
-                  '&:hover': {
-                    borderColor: 'rgba(255,255,255,0.3)',
-                    bgcolor: 'rgba(255,255,255,0.05)',
-                  }
-                }}
-              >
-                — Prev Senior
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                sx={{
-                  color: '#B8A8A0',
-                  borderColor: 'rgba(255,255,255,0.15)',
-                  fontSize: '0.75rem',
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  py: 0.5,
-                  px: 1.5,
-                  '&:hover': {
-                    borderColor: 'rgba(255,255,255,0.3)',
-                    bgcolor: 'rgba(255,255,255,0.05)',
-                  }
-                }}
-              >
-                Next Senior —
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<EditIcon sx={{ fontSize: 13 }} />}
-                sx={{
-                  color: '#B8A8A0',
-                  borderColor: 'rgba(255,255,255,0.15)',
-                  fontSize: '0.75rem',
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  py: 0.5,
-                  px: 1.5,
-                  '&:hover': {
-                    borderColor: 'rgba(255,255,255,0.3)',
-                    bgcolor: 'rgba(255,255,255,0.05)',
-                  }
-                }}
-              >
-                Edit Profile
-              </Button>
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<AddIcon sx={{ fontSize: 13 }} />}
-                sx={{
-                  bgcolor: '#D45529',
-                  color: '#FFFFFF',
-                  fontSize: '0.75rem',
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  py: 0.6,
-                  px: 2,
-                  boxShadow: 'none',
-                  '&:hover': {
-                    bgcolor: '#B23F1C',
-                    boxShadow: 'none',
-                  }
-                }}
-              >
-                Add Note
-              </Button>
-            </Box>
-          </Box>
-        ) : (
-          <Typography
-            variant="h6"
-            sx={{
-              color: '#FFFFFF',
-              fontWeight: 700,
-              fontSize: '1.05rem',
-            }}
-          >
-            {title}
-          </Typography>
-        )}
+        <Typography
+          variant="h6"
+          sx={{
+            color: '#FFFFFF',
+            fontWeight: 700,
+            fontSize: '1.05rem',
+          }}
+        >
+          {title}
+        </Typography>
       </Box>
 
       {/* Right: Admin Control Dropdown */}
@@ -240,27 +135,28 @@ export const Topbar: React.FC<TopbarProps> = ({ title, activeTab, onMobileMenuTo
         <IconButton size="small" sx={{ color: '#8C7E76', p: 0 }}>
           <ArrowDropDownIcon />
         </IconButton>
-
-        <Menu
-          anchorEl={anchorEl}
-          open={Boolean(anchorEl)}
-          onClose={handleMenuClose}
-          sx={{ mt: 1.5 }}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'right',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'right',
-          }}
-        >
-          <MenuItem onClick={handleMenuClose}>My Profile</MenuItem>
-          <MenuItem onClick={handleMenuClose}>System Configs</MenuItem>
-          <DividerMenuItem />
-          <MenuItem onClick={handleMenuClose} sx={{ color: '#F43F5E' }}>Logout</MenuItem>
-        </Menu>
       </Box>
+
+      {/* Menu lives OUTSIDE the clickable box — otherwise item clicks bubble
+          up to the box's onClick and instantly re-open the menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+        sx={{ mt: 1.5 }}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+      >
+        <MenuItem onClick={() => { handleMenuClose(); onNavigate('profile'); }}>My Profile</MenuItem>
+        <DividerMenuItem />
+        <MenuItem onClick={() => { handleMenuClose(); onLogout(); }} sx={{ color: '#F43F5E' }}>Logout</MenuItem>
+      </Menu>
     </Box>
   );
 };

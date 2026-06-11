@@ -1,13 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Box, Typography, Button, Grid } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { MetricsGrid } from '../components/MetricsGrid';
 import { QuickActions } from '../components/QuickActions';
 import { SystemStatus } from '../components/SystemStatus';
 
-export const Dashboard: React.FC = () => {
+interface DashboardProps {
+  role?: string;
+  onNavigate: (tab: string) => void;
+}
+
+export const Dashboard: React.FC<DashboardProps> = ({ role, onNavigate }) => {
+  // Bumping this key remounts MetricsGrid/SystemStatus, which re-fetches their data
+  const [refreshKey, setRefreshKey] = useState(0);
+
   const handleRefresh = () => {
-    console.log('Refreshing operations data...');
+    setRefreshKey((prev) => prev + 1);
   };
 
   return (
@@ -68,19 +76,19 @@ export const Dashboard: React.FC = () => {
 
       {/* Metric Cards Grid */}
       <Box>
-        <MetricsGrid />
+        <MetricsGrid key={`metrics-${refreshKey}`} role={role} />
       </Box>
 
       {/* Lower Workspace Grid */}
       <Grid container spacing={3.5}>
         {/* Quick Actions List (left) */}
-        <Grid size={{ xs: 12, md: 7 }}> {/* Fixed Grid API: size prop instead of item and xs/md */}
-          <QuickActions />
+        <Grid size={{ xs: 12, md: 7 }}>
+          <QuickActions role={role} onNavigate={onNavigate} />
         </Grid>
 
         {/* System Status Table (right) */}
-        <Grid size={{ xs: 12, md: 5 }}> {/* Fixed Grid API: size prop instead of item and xs/md */}
-          <SystemStatus />
+        <Grid size={{ xs: 12, md: 5 }}>
+          <SystemStatus key={`status-${refreshKey}`} role={role} />
         </Grid>
       </Grid>
     </Box>

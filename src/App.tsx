@@ -1,70 +1,164 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { Box, CircularProgress } from '@mui/material';
 import { theme } from './theme/theme';
 import { Layout } from './components/Layout';
-import { Dashboard } from './pages/Dashboard';
-import { Users } from './pages/Users';
-import { Devices } from './pages/Devices';
-import { Guardians } from './pages/Guardians';
-import { Monitors } from './pages/Monitors';
-import { Alerts } from './pages/Alerts';
-import { Profile } from './pages/Profile';
-import { Seniors } from './pages/Seniors'; // Added Seniors import
-import { Card, Typography, Box } from '@mui/material';
+import { ProfileService, AuthService } from './api';
+
+// Pages are lazy-loaded: each one downloads only when first visited,
+// which keeps the initial load (login screen) fast.
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Seniors = lazy(() => import('./pages/Seniors'));
+const Users = lazy(() => import('./pages/Users'));
+const Devices = lazy(() => import('./pages/Devices'));
+const Guardians = lazy(() => import('./pages/Guardians'));
+const Monitors = lazy(() => import('./pages/Monitors'));
+const Alerts = lazy(() => import('./pages/Alerts'));
+const Profile = lazy(() => import('./pages/Profile'));
+
+interface ProfileState {
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  avatarBg: string;
+}
+
+const EMPTY_PROFILE: ProfileState = {
+  name: '',
+  email: '',
+  phone: '',
+  role: '',
+  avatarBg: '#D45529', // SeniorCare theme primary
+};
+
+// Centered spinner shown while a lazy page chunk downloads
+const PageLoader: React.FC = () => (
+  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 12 }}>
+    <CircularProgress sx={{ color: '#D45529' }} />
+  </Box>
+);
+
+// Blocks admin-only pages for other roles. While the profile is still
+// loading (role unknown) it shows a spinner instead of wrongly redirecting.
+const RequireAdmin: React.FC<{ role: string; children: React.ReactElement }> = ({ role, children }) => {
+  if (!role) return <PageLoader />;
+  return role === 'ADMIN' ? children : <Navigate to="/" replace />;
+};
+
+// The signed-in application: sidebar + topbar + routed pages.
+// The URL is the single source of truth for which page is active.
+const AppShell: React.FC<{
+  profile: ProfileState;
+  onUpdateProfile: (p: ProfileState) => void;
+  onLogout: () => void;
+}> = ({ profile, onUpdateProfile, onLogout }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // '/seniors' → 'seniors'; '/' → 'dashboard'
+  const activeTab = location.pathname === '/' ? 'dashboard' : location.pathname.replace(/^\//, '');
+  const goToTab = (tab: string) => navigate(tab === 'dashboard' ? '/' : `/${tab}`);
+
+  return (
+    <Layout activeTab={activeTab} profile={profile} onTabChange={goToTab} onLogout={onLogout}>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<Dashboard role={profile.role} onNavigate={goToTab} />} />
+          <Route path="/seniors" element={<Seniors currentUserName={profile.name} currentUserRole={profile.role} />} />
+          <Route path="/alerts" element={<Alerts role={profile.role} />} />
+          <Route path="/profile" element={<Profile profile={profile} onUpdateProfile={onUpdateProfile} />} />
+          <Route path="/users" element={<RequireAdmin role={profile.role}><Users /></RequireAdmin>} />
+          <Route path="/devices" element={<RequireAdmin role={profile.role}><Devices /></RequireAdmin>} />
+          <Route path="/guardians" element={<RequireAdmin role={profile.role}><Guardians /></RequireAdmin>} />
+          <Route path="/monitors" element={<RequireAdmin role={profile.role}><Monitors /></RequireAdmin>} />
+          {/* Unknown URL → back to the dashboard */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </Layout>
+  );
+};
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('authToken'));
+  const [profile, setProfile] = useState<ProfileState>(EMPTY_PROFILE);
 
-  // Hoisted Admin Profile State
-  const [profile, setProfile] = useState({
-    name: 'Healthsoft Admin Team',
-    email: 'healthsoftcare@gmail.com',
-    phone: '1234512345',
-    role: 'ADMIN',
-    avatarBg: '#D45529', // SeniorCare Theme primary orange-brown
-  });
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'seniors': // Added Seniors route case
-        return <Seniors />;
-      case 'users':
-        return <Users />;
-      case 'devices':
-        return <Devices />;
-      case 'guardians':
-        return <Guardians />;
-      case 'monitors':
-        return <Monitors />;
-      case 'alerts':
-        return <Alerts />;
-      case 'profile':
-        return <Profile profile={profile} onUpdateProfile={setProfile} />;
-      default:
-        return (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-            <Card sx={{ maxWidth: 600, width: '100%', textAlign: 'center', py: 6, px: 4 }}>
-              <Typography variant="h5" sx={{ fontWeight: 700, mb: 1.5, color: '#1A0E07' }}>
-                Section Under Development
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#8C7E76' }}>
-                The "{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}" panel is currently under construction for this live monitoring view.
-              </Typography>
-            </Card>
-          </Box>
-        );
+  const handleLogout = () => {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (refreshToken) {
+      AuthService.logout(refreshToken).catch((err) => {
+        console.warn('Logout API call failed:', err);
+      });
     }
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
+    setIsAuthenticated(false);
+    setProfile(EMPTY_PROFILE);
   };
+
+  const fetchProfile = () => {
+    ProfileService.getProfile()
+      .then((res) => {
+        // Backend may wrap the payload in { data: ... } and uses snake_case field names
+        const data = res?.data ?? res;
+        if (data) {
+          const firstName = data.first_name || data.firstName || '';
+          const lastName = data.last_name || data.lastName || '';
+          const phoneNumber = data.phone_number || data.phoneNumber || '';
+          setProfile({
+            name:
+              data.name ||
+              `${firstName} ${lastName}`.trim() ||
+              data.username ||
+              data.userName ||
+              (data.email ? String(data.email).split('@')[0] : '') ||
+              'User',
+            email: data.email || data.primaryEmail || '',
+            phone: phoneNumber ? String(phoneNumber) : '',
+            role: data.role || '',
+            avatarBg: '#D45529',
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load profile:', err);
+        handleLogout();
+      });
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchProfile();
+    }
+  }, [isAuthenticated]);
+
+  // When the API client gives up on refreshing an expired token,
+  // it broadcasts 'auth:expired' — return the user to the login screen.
+  useEffect(() => {
+    const onSessionExpired = () => {
+      setIsAuthenticated(false);
+      setProfile(EMPTY_PROFILE);
+    };
+    window.addEventListener('auth:expired', onSessionExpired);
+    return () => window.removeEventListener('auth:expired', onSessionExpired);
+  }, []);
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Layout activeTab={activeTab} profile={profile} onTabChange={setActiveTab}>
-        {renderContent()}
-      </Layout>
+      <BrowserRouter>
+        {isAuthenticated ? (
+          <AppShell profile={profile} onUpdateProfile={setProfile} onLogout={handleLogout} />
+        ) : (
+          <Suspense fallback={<PageLoader />}>
+            <Login onLoginSuccess={() => setIsAuthenticated(true)} />
+          </Suspense>
+        )}
+      </BrowserRouter>
     </ThemeProvider>
   );
 };

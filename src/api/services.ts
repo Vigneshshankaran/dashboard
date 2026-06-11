@@ -1,9 +1,20 @@
+/**
+ * services.ts — the "phone book" of the backend.
+ *
+ * Every action the app can ask the backend to do lives here, grouped by
+ * feature (Auth, Profile, Seniors, Monitors, Devices, Alarms, Admin, ...).
+ * Pages never call fetch() directly — they import a service from this file.
+ *
+ * Conventions:
+ *  - `client.get/post/put/patch/delete` → normal authenticated calls
+ *  - `request(...)` → only for calls that need special handling
+ *    (skipAuth for public endpoints, or custom headers)
+ */
 import { client, request } from './client';
 import type {
   UUID,
   UserRole,
   UserSignInRequest,
-  MobileSignInRequest,
   EmailSignUpRequest,
   UpdateProfileRequest,
   UserLoginDTO,
@@ -27,23 +38,18 @@ import type {
   AdminCreateUserRequest,
   AdminUpdateUserRequest,
   AdminMapRequest,
+  AuthTokens,
+  UserProfile,
+  SeniorSummary,
+  DeviceSummary,
+  AdminCounts,
+  ComplianceReport,
 } from './types';
 
 // 1. Authentication Services
 export const AuthService = {
   signin: (body: UserSignInRequest) =>
-    request('/v1/auth/signin', { method: 'POST', body, skipAuth: true }),
-
-  signinMobile: (body: MobileSignInRequest) =>
-    request('/v1/auth/signin/mobile', { method: 'POST', body, skipAuth: true }),
-
-  signinMobileVerify: (body: MobileSignInRequest, xPlatform?: string) =>
-    request('/v1/auth/signin/mobile/verify', {
-      method: 'POST',
-      body,
-      headers: xPlatform ? { 'X-Platform': xPlatform } : undefined,
-      skipAuth: true,
-    }),
+    request<AuthTokens>('/v1/auth/signin', { method: 'POST', body, skipAuth: true }),
 
   signupEmail: (body: EmailSignUpRequest) =>
     request('/v1/auth/signup/email', { method: 'POST', body, skipAuth: true }),
@@ -98,7 +104,7 @@ export const AuthService = {
 // 2. User Profile Services
 export const ProfileService = {
   getProfile: () =>
-    client.get('/v1/profile'),
+    client.get<UserProfile & { data?: UserProfile }>('/v1/profile'),
 
   updateProfile: (body: UpdateProfileRequest) =>
     client.put('/v1/profile', body),
@@ -128,13 +134,13 @@ export const SeniorService = {
     client.delete(`/v1/seniors/map/${mappingId}`),
 
   getMySeniors: () =>
-    client.get('/v1/seniors/my-seniors'),
+    client.get<SeniorSummary[]>('/v1/seniors/my-seniors'),
 
   getMyGuardians: () =>
-    client.get('/v1/seniors/my-guardians'),
+    client.get<UserProfile[]>('/v1/seniors/my-guardians'),
 
   getMyMonitors: () =>
-    client.get('/v1/seniors/my-monitors'),
+    client.get<UserProfile[]>('/v1/seniors/my-monitors'),
 };
 
 // 4. Monitor Services
@@ -158,7 +164,7 @@ export const ComplianceService = {
     client.post('/v1/compliance/reports', body),
 
   getReportsOfSenior: (seniorId: UUID) =>
-    client.get(`/v1/compliance/reports/senior/${seniorId}`),
+    client.get<ComplianceReport[]>(`/v1/compliance/reports/senior/${seniorId}`),
 
   completeSubscription: (seniorId: UUID) =>
     client.post('/v1/compliance/subscription/complete', undefined, { seniorId }),
@@ -182,16 +188,16 @@ export const DashboardService = {
 // 7. Device Registration Services
 export const DeviceService = {
   getDeviceNetworkTypes: () =>
-    request('/v1/devices/network-types', { method: 'GET' }),
+    client.get('/v1/devices/network-types'),
 
   registerDevice: (body: DeviceRegistrationRequest) =>
     request('/v1/devices/register', { method: 'POST', body, skipAuth: true }),
 
   rotateDeviceCredentials: (deviceUUID: UUID) =>
-    request(`/v1/devices/${deviceUUID}/credentials/rotate`, { method: 'POST' }),
+    client.post(`/v1/devices/${deviceUUID}/credentials/rotate`),
 
   revokeDevice: (deviceUUID: UUID) =>
-    request(`/v1/devices/${deviceUUID}/revoke`, { method: 'POST' }),
+    client.post(`/v1/devices/${deviceUUID}/revoke`),
 
   getDeviceDetailsByImei: (imei: string) =>
     request(`/v1/devices/details/by-imei/${imei}`, { method: 'GET', skipAuth: true }),
@@ -217,13 +223,13 @@ export const DeviceAssignmentService = {
     }),
 
   getDeviceAssignment: (deviceId: UUID) =>
-    request(`/v1/devices/assignments/get/${deviceId}`, { method: 'GET' }),
+    client.get(`/v1/devices/assignments/get/${deviceId}`),
 
   getDeviceAssignmentAuditLogs: (assignmentId: UUID) =>
-    request(`/v1/devices/assignments/audit-logs/${assignmentId}`, { method: 'GET' }), // ADMIN ONLY
+    client.get(`/v1/devices/assignments/audit-logs/${assignmentId}`), // ADMIN ONLY
 
   getSeniorDevices: (seniorUUID: UUID) =>
-    request(`/v1/devices/assignments/seniors/${seniorUUID}/devices`, { method: 'GET' }),
+    client.get(`/v1/devices/assignments/seniors/${seniorUUID}/devices`),
 };
 
 // 9. Vitals Services
@@ -325,7 +331,7 @@ export const AdminService = {
     client.delete(`/v1/admin/users/${userId}`),
 
   adminGetUsers: (queryParams?: { active?: boolean }) =>
-    client.get('/v1/admin/users', queryParams),
+    client.get<UserProfile[]>('/v1/admin/users', queryParams),
 
   adminGetUsersAvailableForSenior: (seniorId: UUID, queryParams?: { role?: UserRole }) =>
     client.get(`/v1/admin/users/available-for-senior/${seniorId}`, queryParams),
@@ -337,7 +343,7 @@ export const AdminService = {
     client.get(`/v1/admin/seniors/${mobile}`),
 
   adminGetDevices: () =>
-    client.get('/v1/admin/devices'),
+    client.get<DeviceSummary[]>('/v1/admin/devices'),
 
   adminGetAssignments: () =>
     client.get('/v1/admin/assignments'),
@@ -349,7 +355,7 @@ export const AdminService = {
     client.post('/v1/admin/mappings/admin-map', body),
 
   adminGetCounts: () =>
-    client.get('/v1/admin/counts'),
+    client.get<AdminCounts>('/v1/admin/counts'),
 
   adminGetAlarmEvents: () =>
     client.get('/v1/admin/alarm-events'),
@@ -379,5 +385,5 @@ export const ActuatorService = {
     request('/v1/actuator/health/ready', { method: 'GET', skipAuth: true }),
 
   getHealthInternalDetails: () =>
-    request('/v1/actuator/health/internal/details', { method: 'GET' }), // Authentication checks might be localhost-only on server side
+    client.get('/v1/actuator/health/internal/details'), // Authentication checks might be localhost-only on server side
 };

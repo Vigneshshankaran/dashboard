@@ -1,73 +1,121 @@
-# React + TypeScript + Vite
+# SeniorCare Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A web dashboard for monitoring senior residents — live health vitals, fall alerts, devices, guardians, and monitors. Built with React, TypeScript, and Material UI.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## How to run the app
 
-## React Compiler
+You only need these two commands (run them inside this folder):
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install     # one time only — downloads everything the app needs
+npm run dev     # starts the app — open http://localhost:4200 in your browser
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Sign in with your **email and password** on the login screen.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Other useful commands:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Command | What it does |
+|---|---|
+| `npm run dev` | Runs the app on your computer for development |
+| `npm run build` | Packages the app for putting on a real server |
+| `npm run lint` | Checks the code for common mistakes |
+
+---
+
+## File structure (plain-English tour)
+
+Think of the project like a house: a few rooms matter day-to-day, and the rest is plumbing you rarely touch.
+
 ```
+dashboard/
+│
+├── index.html            ← The single web page the whole app lives inside
+├── package.json          ← Shopping list of tools/libraries the app uses
+├── vite.config.ts        ← Settings for the dev server (port 4200 + connects to the backend)
+├── .env                  ← The backend web address the app talks to
+│
+├── docs/
+│   └── API_SCHEMA.md     ← Full list of backend endpoints — check & update here
+│
+├── public/               ← Images/icons served as-is (favicon etc.)
+├── dist/                 ← Auto-generated "ready to ship" copy of the app (never edit)
+├── node_modules/         ← Auto-downloaded libraries (never edit)
+│
+└── src/                  ← ★ ALL the actual app code lives here ★
+    │
+    ├── main.tsx          ← The "power switch" — starts the app
+    ├── App.tsx           ← The "traffic controller" — decides: not logged in?
+    │                        show Login. Logged in? show the dashboard, and
+    │                        switches between pages when you click the sidebar
+    │
+    ├── pages/            ← One file = one full screen you can visit
+    │   ├── Login.tsx     ←   Sign-in screen (email & password)
+    │   ├── Dashboard.tsx ←   Home screen with overview metrics
+    │   ├── Seniors.tsx   ←   List of seniors + detailed resident profiles
+    │   ├── Users.tsx     ←   Manage user accounts
+    │   ├── Devices.tsx   ←   Manage wearable/monitoring devices
+    │   ├── Guardians.tsx ←   Family members / guardians
+    │   ├── Monitors.tsx  ←   Staff who watch over seniors
+    │   ├── Alerts.tsx    ←   Fall alerts and notifications
+    │   └── Profile.tsx   ←   Your own account settings
+    │
+    ├── components/       ← Reusable building blocks shared by the pages
+    │   ├── Layout.tsx    ←   The overall frame (sidebar + top bar + content area)
+    │   ├── Sidebar.tsx   ←   Left navigation menu
+    │   ├── Topbar.tsx    ←   Bar across the top (title, your avatar, logout)
+    │   ├── MetricsGrid.tsx   Stat cards on the dashboard
+    │   ├── SystemStatus.tsx  "Is everything online?" panel
+    │   ├── QuickActions.tsx  Shortcut buttons
+    │   └── FallAlertModal.tsx Pop-up when a fall is detected
+    │
+    ├── api/              ← Everything about talking to the backend server
+    │   ├── client.ts     ←   The "telephone" — sends requests, attaches your
+    │   │                     login token, handles errors
+    │   ├── services.ts   ←   The "phone book" — every backend action the app
+    │   │                     can ask for (sign in, get seniors, get alerts…)
+    │   ├── types.ts      ←   Descriptions of the data shapes sent/received
+    │   └── index.ts      ←   Front door of this folder (re-exports the above)
+    │
+    ├── theme/
+    │   └── theme.ts      ← Colors, fonts, and styling rules for the whole app
+    │
+    ├── assets/           ← Images used inside the app
+    └── index.css         ← A few global page styles
+```
+
+### How a typical action flows through the app
+
+When you click **Seniors** in the sidebar:
+
+1. **Sidebar.tsx** tells **App.tsx** "the user picked Seniors"
+2. **App.tsx** shows the **pages/Seniors.tsx** screen inside **Layout.tsx**
+3. **Seniors.tsx** asks **api/services.ts** for the list of seniors
+4. **api/client.ts** phones the backend server (address set in `.env` / `vite.config.ts`) and includes your login token
+5. The data comes back and the page draws it on screen
+
+### Logging in
+
+There is **one way to sign in: email + password** (the old mobile-OTP option was removed). After a successful sign-in the app stores a token in your browser, and every later request to the backend carries that token automatically. **Logout** (top-right menu) clears it.
+
+---
+
+## Putting it on the internet (production)
+
+1. Copy `.env.example` to `.env` and set `VITE_API_BASE_URL` to your real backend address (e.g. `https://api.yourdomain.com`). The `/api` proxy trick only works on your own computer.
+2. Make sure the backend allows requests from your site's domain (CORS).
+3. Run `npm run build` — the finished site appears in `dist/`. Upload that folder to any static host (Vercel, Netlify, S3...).
+4. Because the app uses real URLs (`/seniors`, `/alerts`...), tell your host to serve `index.html` for unknown paths ("SPA fallback" — most hosts have a one-click setting for this).
+
+## Where to change common things
+
+| I want to change… | Edit this file |
+|---|---|
+| Colors / fonts | `src/theme/theme.ts` |
+| The sidebar menu items | `src/components/Sidebar.tsx` and `src/App.tsx` |
+| The login screen | `src/pages/Login.tsx` |
+| What a page shows | The matching file in `src/pages/` |
+| The backend server address | `.env` and `vite.config.ts` |
+| A backend endpoint or data shape | `docs/API_SCHEMA.md` + `src/api/services.ts` + `src/api/types.ts` |

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -33,16 +33,19 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import SyncIcon from '@mui/icons-material/Sync';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
 import SearchIcon from '@mui/icons-material/Search';
-import { FallAlertModal } from '../components/FallAlertModal';
+import { AlarmService, AdminService } from '../api';
+import { DataState } from '../components/DataState';
 
-// Mock Alarm Event Log item
+
 interface AlarmEventLog {
   id: string;
-  type: 'Startup' | 'Alarm' | 'Fall' | 'Panic';
+  type: 'Startup' | 'Alarm' | 'Fall' | 'Panic' | 'Geofence';
   device: string;
   identifier: string;
   serial: string;
   timestamp: string;
+  severity: string;
+  resolved: boolean;
 }
 
 interface StatusCardProps {
@@ -120,9 +123,18 @@ const StatusCard: React.FC<StatusCardProps> = ({ value, label, icon, color, bgCo
   );
 };
 
-export const Alerts: React.FC = () => {
+interface AlertsProps {
+  role?: string;
+}
+
+// How often the alerts list silently re-checks the backend (milliseconds)
+const ALERTS_POLL_INTERVAL = 30_000;
+
+export const Alerts: React.FC<AlertsProps> = ({ role }) => {
   const [activeSubTab, setActiveSubTab] = useState<number>(0);
-  const [openFallAlert, setOpenFallAlert] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
 
   // Filters for System Alerts tab
   const [systemSearch, setSystemSearch] = useState('');
@@ -137,24 +149,79 @@ export const Alerts: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
-  // 12 Mock logs matching the screenshot exactly
-  const [logs, _setLogs] = useState<AlarmEventLog[]>([
-    { id: '1', type: 'Startup', device: 'Testeviewgps25576', identifier: '861045085125576', serial: '-', timestamp: '01 May 2026, 11:29 pm' },
-    { id: '2', type: 'Alarm', device: 'Testeviewgps25576', identifier: '861045085125576', serial: '-', timestamp: '01 May 2026, 06:42 pm' },
-    { id: '3', type: 'Alarm', device: 'Testeviewgps25576', identifier: '861045085125576', serial: '-', timestamp: '01 May 2026, 06:42 pm' },
-    { id: '4', type: 'Alarm', device: 'Testeviewgps25576', identifier: '861045085125576', serial: '-', timestamp: '01 May 2026, 04:24 pm' },
-    { id: '5', type: 'Alarm', device: 'Testeviewgps25576', identifier: '861045085125576', serial: '-', timestamp: '01 May 2026, 04:24 pm' },
-    { id: '6', type: 'Alarm', device: 'Testeviewgps25576', identifier: '861045085125576', serial: '-', timestamp: '01 May 2026, 04:23 pm' },
-    { id: '7', type: 'Alarm', device: 'Testeviewgps25576', identifier: '861045085125576', serial: '-', timestamp: '01 May 2026, 04:06 pm' },
-    { id: '8', type: 'Alarm', device: 'Testeviewgps25576', identifier: '861045085125576', serial: '-', timestamp: '01 May 2026, 04:04 pm' },
-    { id: '9', type: 'Fall', device: 'Testeviewgps25576', identifier: '861045085125576', serial: '-', timestamp: '01 May 2026, 04:02 pm' },
-    { id: '10', type: 'Alarm', device: 'Testeviewgps25576', identifier: '861045085125576', serial: '-', timestamp: '01 May 2026, 04:02 pm' },
-    { id: '11', type: 'Fall', device: 'Testeviewgps25576', identifier: '861045085125576', serial: '-', timestamp: '01 May 2026, 04:02 pm' },
-    { id: '12', type: 'Panic', device: 'Testeviewgps25576', identifier: '861045085125576', serial: '-', timestamp: '01 May 2026, 04:01 pm' },
-  ]);
+  const [logs, setLogs] = useState<AlarmEventLog[]>([]);
+
+  const fetchAlerts = () => {
+    const isClientAdmin = role === 'ADMIN';
+    const apiCall = isClientAdmin 
+      ? AdminService.adminGetAlarmEvents() 
+      : AlarmService.getAllAlarms();
+
+    apiCall
+      .then((res) => {
+        setHasError(false);
+        setPageLoading(false);
+        setPageError(null);
+        if (res) {
+          const mapped: AlarmEventLog[] = res.map((a: any) => {
+            let type: 'Startup' | 'Alarm' | 'Fall' | 'Panic' | 'Geofence' = 'Alarm';
+            
+            if (a['fall.alarm.start'] || a['fall.alarm.stop']) type = 'Fall';
+            else if (a['alarm.panic.start'] || a['alarm.panic.stop']) type = 'Panic';
+            else if (a['startup.alarm']) type = 'Startup';
+            else if (a['geofence.alarm.1'] || a['geofence.alarm.2']) type = 'Geofence';
+            else if (a.alarmType) {
+              const at = String(a.alarmType).toLowerCase();
+              if (at.includes('startup')) type = 'Startup';
+              else if (at.includes('fall')) type = 'Fall';
+              else if (at.includes('panic') || at.includes('sos')) type = 'Panic';
+              else if (at.includes('geofence')) type = 'Geofence';
+            }
+            
+            let dateStr = '—';
+            if (a.timestamp) {
+              const ts = String(a.timestamp).length === 10 ? a.timestamp * 1000 : a.timestamp;
+              const d = new Date(ts);
+              dateStr = d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            }
+            return {
+              id: String(a.id || Math.random()),
+              type,
+              device: a['device.name'] || a.deviceUUID || 'Device',
+              identifier: a.ident || (a.deviceUUID ? String(a.deviceUUID).slice(0, 8) : '—'),
+              serial: a['device.serial.number'] || '—',
+              timestamp: dateStr,
+              severity: a.severity || 'MEDIUM',
+              resolved: a.isResolved !== undefined ? a.isResolved : (a.resolved || false),
+            };
+          });
+          setLogs(mapped);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load alarms from API:', err);
+        setHasError(true);
+        setPageLoading(false);
+        // Only block the page if we have nothing to show; during background
+        // polling we keep the last good data on screen instead.
+        setLogs((prev) => {
+          if (prev.length === 0) {
+            setPageError(err?.message || 'The server could not be reached. Please try again.');
+          }
+          return prev;
+        });
+      });
+  };
+
+  // Initial load + live polling so new alerts appear without a manual refresh
+  useEffect(() => {
+    fetchAlerts();
+    const pollId = setInterval(fetchAlerts, ALERTS_POLL_INTERVAL);
+    return () => clearInterval(pollId);
+  }, [role]);
 
   const handleRefresh = () => {
-    console.log('Refreshing system alerts data...');
+    fetchAlerts();
   };
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
@@ -180,7 +247,21 @@ export const Alerts: React.FC = () => {
     }
   };
 
+  // Dynamic count metrics
+  const criticalCount = logs.filter(l => String(l.severity).toUpperCase() === 'CRITICAL').length;
+  const highCount = logs.filter(l => String(l.severity).toUpperCase() === 'HIGH').length;
+  const mediumCount = logs.filter(l => String(l.severity).toUpperCase() === 'MEDIUM').length;
+  const lowCount = logs.filter(l => String(l.severity).toUpperCase() === 'LOW').length;
+  const acknowledgedCount = logs.filter(l => l.resolved === true).length;
+  const totalOpenCount = logs.filter(l => l.resolved !== true).length;
+
+  const panicCount = logs.filter(l => l.type === 'Panic').length;
+  const fallCount = logs.filter(l => l.type === 'Fall').length;
+  const geofenceCount = logs.filter(l => l.type === 'Geofence').length;
+  const startupCount = logs.filter(l => l.type === 'Startup').length;
+
   return (
+    <DataState loading={pageLoading} error={pageError} onRetry={fetchAlerts}>
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
       {/* Header Row */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -202,24 +283,6 @@ export const Alerts: React.FC = () => {
         </Box>
 
         <Box sx={{ display: 'flex', gap: 1.5 }}>
-          <Button
-            variant="contained"
-            onClick={() => setOpenFallAlert(true)}
-            sx={{
-              px: 2,
-              py: 1,
-              background: 'linear-gradient(135deg, #EF4444, #B91C1C)',
-              color: '#FFFFFF',
-              fontWeight: 700,
-              fontSize: '0.85rem',
-              borderRadius: '8px',
-              boxShadow: '0 4px 14px rgba(239,68,68,0.35)',
-              textTransform: 'none',
-              '&:hover': { background: 'linear-gradient(135deg, #DC2626, #991B1B)' },
-            }}
-          >
-            🚨 Simulate Fall Alert
-          </Button>
           <Button
             variant="outlined"
             startIcon={<AutorenewIcon sx={{ color: '#1A0E07' }} />}
@@ -245,36 +308,36 @@ export const Alerts: React.FC = () => {
       <Grid container spacing={1.5}>
         {/* Row 1 Status Cards (Critical, High, Medium, Low, Acknowledged, Total Open) */}
         <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatusCard value="0" label="Critical" icon={<ErrorIcon sx={{ fontSize: 16 }} />} color="#EF4444" bgColor="#FFE4E6" />
+          <StatusCard value={criticalCount} label="Critical" icon={<ErrorIcon sx={{ fontSize: 16 }} />} color="#EF4444" bgColor="#FFE4E6" />
         </Grid>
         <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatusCard value="0" label="High" icon={<WarningIcon sx={{ fontSize: 16 }} />} color="#F97316" bgColor="#FFEDD5" />
+          <StatusCard value={highCount} label="High" icon={<WarningIcon sx={{ fontSize: 16 }} />} color="#F97316" bgColor="#FFEDD5" />
         </Grid>
         <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatusCard value="0" label="Medium" icon={<AccessTimeIcon sx={{ fontSize: 16 }} />} color="#EAB308" bgColor="#FEF9C3" />
+          <StatusCard value={mediumCount} label="Medium" icon={<AccessTimeIcon sx={{ fontSize: 16 }} />} color="#EAB308" bgColor="#FEF9C3" />
         </Grid>
         <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatusCard value="0" label="Low" icon={<RemoveCircleIcon sx={{ fontSize: 16 }} />} color="#A855F7" bgColor="#F3E8FF" />
+          <StatusCard value={lowCount} label="Low" icon={<RemoveCircleIcon sx={{ fontSize: 16 }} />} color="#A855F7" bgColor="#F3E8FF" />
         </Grid>
         <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatusCard value="0" label="Acknowledged" icon={<CheckCircleIcon sx={{ fontSize: 16 }} />} color="#22C55E" bgColor="#DCFCE7" />
+          <StatusCard value={acknowledgedCount} label="Acknowledged" icon={<CheckCircleIcon sx={{ fontSize: 16 }} />} color="#22C55E" bgColor="#DCFCE7" />
         </Grid>
         <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <StatusCard value="0" label="Total Open" icon={<AssignmentIcon sx={{ fontSize: 16 }} />} color="#3B82F6" bgColor="#DBEAFE" />
+          <StatusCard value={totalOpenCount} label="Total Open" icon={<AssignmentIcon sx={{ fontSize: 16 }} />} color="#3B82F6" bgColor="#DBEAFE" />
         </Grid>
 
         {/* Row 2 Status Cards (Panic, Fall, Geofence, Startup) */}
         <Grid size={{ xs: 6, sm: 3 }}>
-          <StatusCard value="4" label="Panic" icon={<NotificationsIcon sx={{ fontSize: 16 }} />} color="#E11D48" bgColor="#FFE4E6" />
+          <StatusCard value={panicCount} label="Panic" icon={<NotificationsIcon sx={{ fontSize: 16 }} />} color="#E11D48" bgColor="#FFE4E6" />
         </Grid>
         <Grid size={{ xs: 6, sm: 3 }}>
-          <StatusCard value="6" label="Fall" icon={<DirectionsRunIcon sx={{ fontSize: 16 }} />} color="#F97316" bgColor="#FFEDD5" />
+          <StatusCard value={fallCount} label="Fall" icon={<DirectionsRunIcon sx={{ fontSize: 16 }} />} color="#F97316" bgColor="#FFEDD5" />
         </Grid>
         <Grid size={{ xs: 6, sm: 3 }}>
-          <StatusCard value="2" label="Geofence" icon={<LocationOnIcon sx={{ fontSize: 16 }} />} color="#EAB308" bgColor="#FEF9C3" />
+          <StatusCard value={geofenceCount} label="Geofence" icon={<LocationOnIcon sx={{ fontSize: 16 }} />} color="#EAB308" bgColor="#FEF9C3" />
         </Grid>
         <Grid size={{ xs: 6, sm: 3 }}>
-          <StatusCard value="6" label="Startup" icon={<SyncIcon sx={{ fontSize: 16 }} />} color="#16A34A" bgColor="#DCFCE7" />
+          <StatusCard value={startupCount} label="Startup" icon={<SyncIcon sx={{ fontSize: 16 }} />} color="#16A34A" bgColor="#DCFCE7" />
         </Grid>
       </Grid>
 
@@ -298,7 +361,7 @@ export const Alerts: React.FC = () => {
             }}
           >
             <Tab label="System Alerts" />
-            <Tab label="Alarm Events 73" />
+            <Tab label={`Alarm Events (${logs.length})`} />
           </Tabs>
         </Box>
 
@@ -366,23 +429,25 @@ export const Alerts: React.FC = () => {
             </Box>
 
             {/* Error Warning Banner */}
-            <Alert
-              severity="error"
-              sx={{
-                width: '100%',
-                fontWeight: 600,
-                borderRadius: '8px',
-                border: '1px solid #FCA5A5',
-                backgroundColor: '#FEE2E2',
-                color: '#991B1B',
-                py: 0.5,
-                '& .MuiAlert-icon': {
-                  color: '#EF4444',
-                },
-              }}
-            >
-              Failed to load system alerts.
-            </Alert>
+            {hasError && (
+              <Alert
+                severity="error"
+                sx={{
+                  width: '100%',
+                  fontWeight: 600,
+                  borderRadius: '8px',
+                  border: '1px solid #FCA5A5',
+                  backgroundColor: '#FEE2E2',
+                  color: '#991B1B',
+                  py: 0.5,
+                  '& .MuiAlert-icon': {
+                    color: '#EF4444',
+                  },
+                }}
+              >
+                Failed to load system alerts.
+              </Alert>
+            )}
 
             {/* Clean empty state wrapper */}
             <Card
@@ -414,7 +479,7 @@ export const Alerts: React.FC = () => {
           </Box>
         )}
 
-        {/* SUBTAB 1: Alarm Events 73 */}
+        {/* SUBTAB 1: Alarm Events */}
         {activeSubTab === 1 && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* Filter controls panel */}
@@ -569,9 +634,8 @@ export const Alerts: React.FC = () => {
         )}
       </Box>
 
-      {/* Fall Alert Modal */}
-      <FallAlertModal open={openFallAlert} onClose={() => setOpenFallAlert(false)} />
     </Box>
+    </DataState>
   );
 };
 
