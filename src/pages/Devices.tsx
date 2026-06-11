@@ -160,7 +160,7 @@ export const Devices: React.FC = () => {
     // used to enrich the Senior Details popup.
     AdminService.adminGetUsers()
       .then((res) => {
-        const list = Array.isArray(res) ? res : res?.data ?? [];
+        const list = Array.isArray(res) ? res : (res as any)?.data ?? [];
         setSeniorUsers(list.filter((u: any) => u.role === 'SENIOR'));
       })
       .catch((err) => {
