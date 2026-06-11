@@ -49,9 +49,12 @@ interface DeviceItem {
   id: string;
   name: string;
   imei: string;
+  identifier: string;
   model: string;
   network: string;
   status: string; // backend value as-is, e.g. ACTIVE / REVOKED
+  firmware: string;
+  lastSeen: string;
   assignedToName: string;
   assignedToPhone: string;
   battery: string;
@@ -160,19 +163,31 @@ export const Devices: React.FC = () => {
       .then((res) => {
         setPageLoading(false);
         if (res) {
-          const list: DeviceItem[] = res.map((d: any) => ({
+          const list: DeviceItem[] = res.map((d: any) => {
             // Real API fields: id, deviceName, imei, deviceIdentifier, model,
             // networkType, status (ACTIVE/REVOKED), batteryLevel, lastSeen
-            id: d.id,
-            name: d.deviceName || 'Unnamed Device',
-            imei: d.imei || d.deviceIdentifier || '—',
-            model: d.model || '—',
-            network: d.networkType || '—',
-            status: d.status || '—', // show the backend's status exactly as sent (ACTIVE / REVOKED)
-            assignedToName: '—',
-            assignedToPhone: '—',
-            battery: d.batteryLevel !== null && d.batteryLevel !== undefined ? `${d.batteryLevel}%` : '—',
-          }));
+            let lastSeenStr = '—';
+            if (d.lastSeen) {
+              const ts = new Date(String(d.lastSeen).length === 10 ? Number(d.lastSeen) * 1000 : d.lastSeen);
+              if (!isNaN(ts.getTime())) {
+                lastSeenStr = ts.toLocaleString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+              }
+            }
+            return {
+              id: d.id,
+              name: d.deviceName || 'Unnamed Device',
+              imei: d.imei || d.deviceIdentifier || '—',
+              identifier: d.deviceIdentifier || '—',
+              model: d.model || '—',
+              network: d.networkType || '—',
+              status: d.status || '—', // show the backend's status exactly as sent (ACTIVE / REVOKED)
+              firmware: d.firmwareVersion || d.firmware || '—',
+              lastSeen: lastSeenStr,
+              assignedToName: '—',
+              assignedToPhone: '—',
+              battery: d.batteryLevel !== null && d.batteryLevel !== undefined ? `${d.batteryLevel}%` : '—',
+            };
+          });
           setDevices(list);
         }
       })
@@ -285,26 +300,43 @@ export const Devices: React.FC = () => {
   };
 
   // Rotate a device's credentials (POST /v1/devices/{uuid}/credentials/rotate)
-  const handleRotateCredentials = (id: string) => {
-    DeviceService.rotateDeviceCredentials(id)
-      .then(() => {
-        alert('Device credentials rotated successfully.');
+  // and show the result — including any new credentials — in a popup.
+  const [rotateResult, setRotateResult] = useState<{
+    open: boolean;
+    loading: boolean;
+    deviceName: string;
+    data: any | null;
+    error: string | null;
+  }>({ open: false, loading: false, deviceName: '', data: null, error: null });
+
+  const handleRotateCredentials = (device: DeviceItem) => {
+    setRotateResult({ open: true, loading: true, deviceName: device.name, data: null, error: null });
+    DeviceService.rotateDeviceCredentials(device.id)
+      .then((res) => {
+        setRotateResult({ open: true, loading: false, deviceName: device.name, data: res?.data ?? res ?? {}, error: null });
       })
       .catch((err) => {
         console.error('Failed to rotate device credentials in API:', err);
-        alert(`Credential rotation failed: ${err?.message || 'Unknown error from server'}`);
+        setRotateResult({
+          open: true,
+          loading: false,
+          deviceName: device.name,
+          data: null,
+          error: err?.message || 'Unknown error from server',
+        });
       });
   };
 
   // Unlink/Delete Assignment
   const handleDeleteAssignment = (id: string) => {
+    if (!window.confirm('Unassign this device from its senior?')) return;
     DeviceAssignmentService.unassignDevice(id, { assignmentId: id, reason: 'Unlinked by Admin' })
       .then(() => {
         fetchAssignments();
       })
       .catch((err) => {
         console.error('Failed to unassign device in API:', err);
-        alert('Failed to unassign device in API.');
+        alert(`Unassign failed: ${err?.message || 'Unknown error from server'}`);
       });
   };
 
@@ -313,7 +345,18 @@ export const Devices: React.FC = () => {
     // Use the registry record when we have it; otherwise show what the assignment carries
     const dev = devices.find((d) => d.id === assignment.deviceUUID || (d.imei !== '—' && d.imei === assignment.deviceImei));
     setDeviceDetail(
-      dev || { name: assignment.deviceName, imei: assignment.deviceImei, model: '—', network: '—', status: '—', battery: '—' }
+      dev || {
+        id: assignment.deviceUUID || '—',
+        name: assignment.deviceName,
+        imei: assignment.deviceImei,
+        identifier: '—',
+        model: '—',
+        network: '—',
+        status: '—',
+        firmware: '—',
+        lastSeen: '—',
+        battery: '—',
+      }
     );
   };
 
@@ -609,7 +652,7 @@ export const Devices: React.FC = () => {
                             <IconButton
                               size="small"
                               title="Rotate device credentials"
-                              onClick={() => handleRotateCredentials(device.id)}
+                              onClick={() => handleRotateCredentials(device)}
                               sx={{
                                 color: '#1A0E07',
                                 border: '1px solid #EAE5E0',
@@ -624,6 +667,30 @@ export const Devices: React.FC = () => {
                             >
                               <BoltIcon sx={{ fontSize: 16 }} />
                             </IconButton>
+                            {(() => {
+                              const assignment = getAssignedSenior(device);
+                              return assignment ? (
+                                <Tooltip title={`Unassign from ${assignment.seniorName}`} arrow>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleDeleteAssignment(assignment.id)}
+                                    sx={{
+                                      color: '#1A0E07',
+                                      border: '1px solid #EAE5E0',
+                                      borderRadius: '6px',
+                                      p: 0.75,
+                                      '&:hover': {
+                                        backgroundColor: '#FFF7ED',
+                                        color: '#F97316',
+                                        borderColor: '#FDBA74',
+                                      },
+                                    }}
+                                  >
+                                    <LinkOffIcon sx={{ fontSize: 16 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              ) : null;
+                            })()}
                             <IconButton
                               size="small"
                               title="Revoke device (permanent)"
@@ -1433,11 +1500,15 @@ export const Devices: React.FC = () => {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
               {[
                 ['Name', deviceDetail.name],
+                ['UUID', deviceDetail.id],
                 ['IMEI', deviceDetail.imei],
+                ['Identifier', deviceDetail.identifier],
                 ['Model', deviceDetail.model],
                 ['Network', deviceDetail.network],
                 ['Status', deviceDetail.status],
+                ['Firmware', deviceDetail.firmware],
                 ['Battery', deviceDetail.battery],
+                ['Last Seen', deviceDetail.lastSeen],
               ].map(([label, value]) => (
                 <React.Fragment key={label}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1465,7 +1536,10 @@ export const Devices: React.FC = () => {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
               {[
                 ['Name', seniorDetail.name],
+                ['UUID', seniorDetail.raw?.id || seniorDetail.raw?.userId || '—'],
                 ['Phone', seniorDetail.phone],
+                ['Email', seniorDetail.raw?.primaryEmail || seniorDetail.raw?.email || '—'],
+                ['Status', seniorDetail.raw?.status || (seniorDetail.raw?.active !== undefined ? (seniorDetail.raw.active ? 'ACTIVE' : 'INACTIVE') : '—')],
                 ['Gender', seniorDetail.raw?.gender || (seniorDetail.raw?.isMale !== undefined ? (seniorDetail.raw.isMale ? 'Male' : 'Female') : '—')],
                 ['Date of Birth', seniorDetail.raw?.dateOfBirth ? new Date(seniorDetail.raw.dateOfBirth).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'],
                 ['Height', seniorDetail.raw?.height ? `${seniorDetail.raw.height} cm` : '—'],
@@ -1535,6 +1609,55 @@ export const Devices: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAuditDialog((p) => ({ ...p, open: false }))} color="inherit">Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ─── Credential Rotation result popup ─────────────────────────────── */}
+      <Dialog open={rotateResult.open} onClose={() => setRotateResult((p) => ({ ...p, open: false }))} maxWidth="xs" fullWidth>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 750, color: '#1A0E07', mb: 0.5 }}>
+            Rotate Credentials
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#8C7E76', mb: 2 }}>
+            {rotateResult.deviceName}
+          </Typography>
+          {rotateResult.loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+              <CircularProgress size={28} sx={{ color: '#D45529' }} />
+            </Box>
+          ) : rotateResult.error ? (
+            <Typography variant="body2" sx={{ color: '#DC2626' }}>
+              Rotation failed: {rotateResult.error}
+            </Typography>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+              <Typography variant="body2" sx={{ color: '#059669', fontWeight: 700 }}>
+                ✓ Credentials rotated successfully
+              </Typography>
+              {rotateResult.data && Object.entries(rotateResult.data).filter(([, v]) => ['string', 'number', 'boolean'].includes(typeof v)).length > 0 && (
+                <>
+                  <Typography variant="caption" sx={{ color: '#8C7E76' }}>
+                    New credentials returned by the server — copy them now; they are not shown again:
+                  </Typography>
+                  <Box sx={{ p: 1.5, bgcolor: '#FAF8F6', borderRadius: '8px', border: '1px solid #EAE5E0', display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                    {Object.entries(rotateResult.data)
+                      .filter(([, v]) => ['string', 'number', 'boolean'].includes(typeof v))
+                      .map(([key, value]) => (
+                        <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                          <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700 }}>{key}</Typography>
+                          <Typography variant="caption" sx={{ color: '#1A0E07', fontWeight: 600, fontFamily: 'monospace', wordBreak: 'break-all', textAlign: 'right' }}>
+                            {String(value)}
+                          </Typography>
+                        </Box>
+                      ))}
+                  </Box>
+                </>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRotateResult((p) => ({ ...p, open: false }))} color="inherit">Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
