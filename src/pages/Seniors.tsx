@@ -33,6 +33,8 @@ import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import InfoIcon from '@mui/icons-material/Info';
 import SendIcon from '@mui/icons-material/Send';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ErrorIcon from '@mui/icons-material/Error';
 import DeviceHubIcon from '@mui/icons-material/DeviceHub';
 
@@ -343,6 +345,17 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
 
   const [guardianPrefs, setGuardianPrefs] = useState<Record<string, any>>({});
 
+  // ─── Prev / Next senior navigation ─────────────────────────────────────────
+  const currentSeniorIndex = seniorsList.findIndex((s) => s.id === selectedSenior.id);
+
+  const goToPrevSenior = () => {
+    if (currentSeniorIndex > 0) setSelectedSenior(seniorsList[currentSeniorIndex - 1]);
+  };
+
+  const goToNextSenior = () => {
+    if (currentSeniorIndex < seniorsList.length - 1) setSelectedSenior(seniorsList[currentSeniorIndex + 1]);
+  };
+
   // ─── Handlers ──────────────────────────────────────────────────────────────
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setActiveSubTab(newValue);
@@ -499,7 +512,57 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
           </Box>
 
           {/* Header Action Buttons */}
-          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', width: { xs: '100%', md: 'auto' } }}>
+          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', width: { xs: '100%', md: 'auto' } }}>
+            {/* Prev / Next senior — only when there is more than one resident */}
+            {seniorsList.length > 1 && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<ChevronLeftIcon sx={{ fontSize: 16 }} />}
+                  onClick={goToPrevSenior}
+                  disabled={currentSeniorIndex <= 0}
+                  sx={{
+                    color: '#FFFFFF',
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    fontSize: '0.78rem',
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': { borderColor: '#FFFFFF', bgcolor: 'rgba(255, 255, 255, 0.08)' },
+                    '&.Mui-disabled': { color: 'rgba(255, 255, 255, 0.3)', borderColor: 'rgba(255, 255, 255, 0.08)' },
+                  }}
+                >
+                  Prev
+                </Button>
+                <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 700, whiteSpace: 'nowrap', px: 0.5 }}>
+                  {currentSeniorIndex + 1} of {seniorsList.length}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
+                  onClick={goToNextSenior}
+                  disabled={currentSeniorIndex >= seniorsList.length - 1}
+                  sx={{
+                    color: '#FFFFFF',
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    fontSize: '0.78rem',
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': { borderColor: '#FFFFFF', bgcolor: 'rgba(255, 255, 255, 0.08)' },
+                    '&.Mui-disabled': { color: 'rgba(255, 255, 255, 0.3)', borderColor: 'rgba(255, 255, 255, 0.08)' },
+                  }}
+                >
+                  Next
+                </Button>
+              </Box>
+            )}
             <Button
               variant="contained"
               onClick={() => setOpenFallAlert(true)}
