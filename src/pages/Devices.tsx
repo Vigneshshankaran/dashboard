@@ -97,6 +97,7 @@ export const Devices: React.FC = () => {
   const [selectedAssignDevice, setSelectedAssignDevice] = useState('');
   const [selectedAssignSenior, setSelectedAssignSenior] = useState('');
   const [seniorsData, setSeniorsData] = useState<any[]>([]); // raw seniors from /v1/admin/seniors
+  const [seniorUsers, setSeniorUsers] = useState<any[]>([]); // SENIOR-role users from /v1/admin/users (id/email/status)
 
   // Detail popups for the assignments table
   const [deviceDetail, setDeviceDetail] = useState<any | null>(null);
@@ -154,6 +155,16 @@ export const Devices: React.FC = () => {
       })
       .catch((err) => {
         console.warn('Failed to fetch seniors from API:', err);
+      });
+    // The users list carries id/email/status that the seniors list may lack —
+    // used to enrich the Senior Details popup.
+    AdminService.adminGetUsers()
+      .then((res) => {
+        const list = Array.isArray(res) ? res : res?.data ?? [];
+        setSeniorUsers(list.filter((u: any) => u.role === 'SENIOR'));
+      })
+      .catch((err) => {
+        console.warn('Failed to fetch users from API:', err);
       });
   };
 
@@ -361,13 +372,19 @@ export const Devices: React.FC = () => {
   };
 
   const openSeniorDetails = (assignment: any) => {
-    // Match the senior record by phone (assignments carry name + phone only)
-    const raw = seniorsData.find(
-      (s: any) =>
-        String(s.phoneNumber || s.phone_number || '') === assignment.seniorPhone ||
-        `${s.firstName || ''} ${s.lastName || ''}`.trim() === assignment.seniorName
-    );
-    setSeniorDetail({ name: assignment.seniorName, phone: assignment.seniorPhone, raw: raw || null });
+    // Assignments carry only name + phone. Resolve the full record from BOTH
+    // the seniors list and the users list (which has id/email/status), then
+    // merge. Phones compared by their last 10 digits to survive country codes.
+    const normalizePhone = (p: any) => String(p ?? '').replace(/\D/g, '').slice(-10);
+    const phone = normalizePhone(assignment.seniorPhone);
+    const matches = (s: any) =>
+      (phone && normalizePhone(s.phoneNumber || s.phone_number) === phone) ||
+      `${s.firstName || s.first_name || ''} ${s.lastName || s.last_name || ''}`.trim() === assignment.seniorName;
+
+    const senior = seniorsData.find(matches);
+    const user = seniorUsers.find(matches);
+    const raw = senior || user ? { ...(user || {}), ...(senior || {}) } : null;
+    setSeniorDetail({ name: assignment.seniorName, phone: assignment.seniorPhone, raw });
   };
 
   const openAuditHistory = (assignmentId: string) => {
@@ -1536,7 +1553,7 @@ export const Devices: React.FC = () => {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
               {[
                 ['Name', seniorDetail.name],
-                ['UUID', seniorDetail.raw?.id || seniorDetail.raw?.userId || '—'],
+                ['UUID', seniorDetail.raw?.id || seniorDetail.raw?.userId || seniorDetail.raw?.seniorId || seniorDetail.raw?.uuid || '—'],
                 ['Phone', seniorDetail.phone],
                 ['Email', seniorDetail.raw?.primaryEmail || seniorDetail.raw?.email || '—'],
                 ['Status', seniorDetail.raw?.status || (seniorDetail.raw?.active !== undefined ? (seniorDetail.raw.active ? 'ACTIVE' : 'INACTIVE') : '—')],
