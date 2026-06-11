@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -23,6 +23,8 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SaveIcon from '@mui/icons-material/Save';
 import CloseIcon from '@mui/icons-material/Close';
+import { ProfileService } from '../api';
+
 
 interface ProfileProps {
   profile: {
@@ -46,12 +48,12 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
   const [isEditing, setIsEditing] = useState(false);
 
   // Form input states (matched with mockup screenshots)
-  const [firstName, setFirstName] = useState(profile.name.split(' ')[0] || 'Healthsoft');
-  const [lastName, setLastName] = useState(profile.name.split(' ').slice(1).join(' ') || 'Admin Team');
-  const [username, setUsername] = useState('healthsoft.monitor.dc16');
-  const [phone, setPhone] = useState(profile.phone);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [username, setUsername] = useState('');
+  const [phone, setPhone] = useState('');
   const [secondaryEmail, setSecondaryEmail] = useState('');
-  const [dob, setDob] = useState('1996-11-02');
+  const [dob, setDob] = useState('');
   const [gender, setGender] = useState('');
   const [maritalStatus, setMaritalStatus] = useState('');
   const [nationality, setNationality] = useState('');
@@ -75,24 +77,76 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
   // Toast / Snackbar state
   const [openSnackbar, setOpenSnackbar] = useState(false);
 
+  useEffect(() => {
+    ProfileService.getProfile()
+      .then((response) => {
+        // Backend may wrap the payload in { data: ... }
+        const res = response?.data ?? response;
+        if (res) {
+          const fName = res.first_name || res.firstName || '';
+          const lName = res.last_name || res.lastName || '';
+          const name = res.name || `${fName} ${lName}`.trim() || profile.name;
+          const phoneNum = res.phone_number || res.phoneNumber || '';
+          const uName = res.username || res.userName || '';
+
+          onUpdateProfile({
+            name,
+            email: res.email || res.primaryEmail || profile.email,
+            phone: phoneNum ? String(phoneNum) : profile.phone,
+            role: res.role || profile.role,
+            avatarBg: profile.avatarBg,
+          });
+          if (fName) setFirstName(fName);
+          if (lName) setLastName(lName);
+          if (uName) setUsername(uName);
+          if (phoneNum) setPhone(String(phoneNum));
+          if (res.dob) setDob(new Date(res.dob).toISOString().split('T')[0]);
+          if (res.gender) setGender(res.gender);
+          if (res.maritalStatus) setMaritalStatus(res.maritalStatus);
+          if (res.nationality) setNationality(res.nationality);
+          if (res.occupation) setOccupation(res.occupation);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to fetch profile from API, using mock default:', err);
+      });
+  }, []);
+
   // Save changes handler
   const handleSave = () => {
     const fullName = `${firstName.trim()} ${lastName.trim()}`.trim() || profile.name;
-    onUpdateProfile({
-      name: fullName,
-      email: profile.email,
-      phone: phone.trim() || profile.phone,
-      role: profile.role,
-      avatarBg: profile.avatarBg,
-    });
-    setIsEditing(false);
-    setOpenSnackbar(true);
+    const updatePayload = {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      userName: username.trim(),
+      phoneNumber: Number(phone.trim().replace(/\D/g, '')) || 0,
+      secondaryEmail: secondaryEmail.trim(),
+      profileImageUrl: '',
+      dob: dob ? new Date(dob).getTime() : Date.now(),
+    };
+
+    ProfileService.updateProfile(updatePayload)
+      .then(() => {
+        onUpdateProfile({
+          name: fullName,
+          email: profile.email,
+          phone: phone.trim() || profile.phone,
+          role: profile.role,
+          avatarBg: profile.avatarBg,
+        });
+        setIsEditing(false);
+        setOpenSnackbar(true);
+      })
+      .catch((err) => {
+        console.error('Failed to update profile on API:', err);
+        alert('Failed to update profile on API.');
+      });
   };
 
   const handleCancel = () => {
     // Revert to current profile details
-    setFirstName(profile.name.split(' ')[0] || 'Healthsoft');
-    setLastName(profile.name.split(' ').slice(1).join(' ') || 'Admin Team');
+    setFirstName(profile.name.split(' ')[0] || '');
+    setLastName(profile.name.split(' ').slice(1).join(' ') || '');
     setPhone(profile.phone);
     setIsEditing(false);
   };

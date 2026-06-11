@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Grid, Card, Box, Typography, Link } from '@mui/material';
 import PeopleIcon from '@mui/icons-material/People';
 import ElderlyIcon from '@mui/icons-material/Elderly';
@@ -6,6 +6,7 @@ import SmartphoneIcon from '@mui/icons-material/Smartphone';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'; // Standard arrow icon
+import { AdminService, SeniorService, AlarmService } from '../api';
 
 interface MetricItem {
   id: string;
@@ -16,40 +17,94 @@ interface MetricItem {
   isAlert?: boolean;
 }
 
-export const MetricsGrid: React.FC = () => {
+interface MetricsGridProps {
+  role?: string;
+}
+
+export const MetricsGrid: React.FC<MetricsGridProps> = ({ role }) => {
+  const [counts, setCounts] = useState({
+    users: 0,
+    seniors: 0,
+    devices: 0,
+    approvals: 0,
+    alarms: 0,
+  });
+
+  useEffect(() => {
+    const isClientAdmin = role === 'ADMIN';
+
+    if (isClientAdmin) {
+      AdminService.adminGetCounts()
+        .then((res) => {
+          if (res) {
+            setCounts({
+              users: res.totalUsers ?? res.users ?? 0,
+              seniors: res.totalSeniors ?? res.seniors ?? 0,
+              devices: res.totalDevices ?? res.devices ?? 0,
+              approvals: res.pendingMappings ?? res.approvals ?? 0,
+              alarms: res.totalAlerts ?? res.alarms ?? 0,
+            });
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load counts from API:', err);
+        });
+    } else {
+      // Fetch user-level personal counts
+      Promise.all([
+        SeniorService.getMySeniors().catch(() => []),
+        SeniorService.getMyGuardians().catch(() => []),
+        SeniorService.getMyMonitors().catch(() => []),
+        AlarmService.getAllAlarms().catch(() => []),
+      ])
+        .then(([seniors, guardians, monitors, alarms]) => {
+          setCounts({
+            users: guardians.length + monitors.length, // Total relationship contacts
+            seniors: seniors.length,
+            devices: seniors.reduce((acc: number, s: any) => acc + (s.devicesCount || 0), 0),
+            approvals: 0, // Pending approvals not applicable for family/caregivers
+            alarms: alarms.length,
+          });
+        })
+        .catch((err) => {
+          console.error('Failed to load user-level counts:', err);
+        });
+    }
+  }, [role]);
+
   const metrics: MetricItem[] = [
     {
       id: 'users',
       title: 'TOTAL USERS',
-      value: 12,
+      value: counts.users,
       icon: <PeopleIcon />,
       linkText: 'View all users',
     },
     {
       id: 'seniors',
       title: 'REGISTERED SENIORS',
-      value: 4,
+      value: counts.seniors,
       icon: <ElderlyIcon />,
       linkText: 'View seniors',
     },
     {
       id: 'devices',
       title: 'ACTIVE DEVICES',
-      value: 4,
+      value: counts.devices,
       icon: <SmartphoneIcon />,
       linkText: 'View devices',
     },
     {
       id: 'approvals',
       title: 'PENDING APPROVALS',
-      value: 0,
+      value: counts.approvals,
       icon: <HourglassEmptyIcon />,
       linkText: 'View mappings',
     },
     {
       id: 'alarms',
       title: 'ALARM EVENTS',
-      value: 73,
+      value: counts.alarms,
       icon: <NotificationsActiveIcon />,
       linkText: 'View alerts',
       isAlert: true,

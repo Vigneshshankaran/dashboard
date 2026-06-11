@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -29,6 +29,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import PersonIcon from '@mui/icons-material/Person';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
+import { AdminService, SeniorService } from '../api';
+
 
 // Senior-Guardian mapping item
 interface MappingItem {
@@ -42,86 +44,10 @@ interface MappingItem {
   date: string;
 }
 
-// Available seniors list
-const SENIORS = [
-  { id: 's1', name: 'Sushil T.', email: '8459221606@healthsoft.in' },
-  { id: 's2', name: 'Dummy Senior', email: '9317251535@healthsoft.in' },
-  { id: 's3', name: 'Shravan Harishankar', email: '9003197571@healthsoft.in' },
-  { id: 's4', name: 'KC Anand', email: '9840074789@healthsoft.in' },
-];
-
-// Available guardians list
-const GUARDIANS = [
-  { id: 'g1', name: 'YSk Kumar', email: 'ktsushildev@gmail.com' },
-  { id: 'g2', name: 'Ratnender Girri', email: 'ratnendr.girri@gmail.com' },
-  { id: 'g3', name: 'Seetharam S.', email: 'catchseetga@gmail.com' },
-  { id: 'g4', name: 'KC Anand', email: 'kcanand@healthsoft.in' },
-  { id: 'g5', name: 'Healthsoft Admin Team', email: 'healthsoftcare@gmail.com' },
-];
-
 export const Guardians: React.FC = () => {
-  const [mappings, setMappings] = useState<MappingItem[]>([
-    {
-      id: 'm1',
-      seniorName: 'Sushil T.',
-      seniorEmail: '8459221606@healthsoft.in',
-      seniorPhone: '8459221606',
-      guardianName: 'YSk Kumar',
-      guardianEmail: 'ktsushildev@gmail.com',
-      status: 'APPROVED',
-      date: 'Apr 12, 2026',
-    },
-    {
-      id: 'm2',
-      seniorName: 'Sushil T.',
-      seniorEmail: '8459221606@healthsoft.in',
-      seniorPhone: '8459221606',
-      guardianName: 'Ratnender Girri',
-      guardianEmail: 'ratnendr.girri@gmail.com',
-      status: 'APPROVED',
-      date: 'Apr 19, 2026',
-    },
-    {
-      id: 'm3',
-      seniorName: 'Dummy Senior',
-      seniorEmail: '9317251535@healthsoft.in',
-      seniorPhone: '9317251535',
-      guardianName: 'Ratnender Girri',
-      guardianEmail: 'ratnendr.girri@gmail.com',
-      status: 'APPROVED',
-      date: 'Apr 20, 2026',
-    },
-    {
-      id: 'm4',
-      seniorName: 'Shravan Harishankar',
-      seniorEmail: '9003197571@healthsoft.in',
-      seniorPhone: '9003197571',
-      guardianName: 'Ratnender Girri',
-      guardianEmail: 'ratnendr.girri@gmail.com',
-      status: 'APPROVED',
-      date: 'Apr 20, 2026',
-    },
-    {
-      id: 'm5',
-      seniorName: 'Shravan Harishankar',
-      seniorEmail: '9003197571@healthsoft.in',
-      seniorPhone: '9003197571',
-      guardianName: 'Seetharam S.',
-      guardianEmail: 'catchseetga@gmail.com',
-      status: 'APPROVED',
-      date: 'May 3, 2026',
-    },
-    {
-      id: 'm6',
-      seniorName: 'Shravan Harishankar',
-      seniorEmail: '9003197571@healthsoft.in',
-      seniorPhone: '9003197571',
-      guardianName: 'YSk Kumar',
-      guardianEmail: 'ktsushildev@gmail.com',
-      status: 'APPROVED',
-      date: 'May 3, 2026',
-    },
-  ]);
+  const [mappings, setMappings] = useState<MappingItem[]>([]);
+  const [seniors, setSeniors] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [guardians, setGuardians] = useState<{ id: string; name: string; email: string }[]>([]);
 
   const [activeSubTab, setActiveSubTab] = useState(0);
 
@@ -130,8 +56,88 @@ export const Guardians: React.FC = () => {
   const [selectedSeniorId, setSelectedSeniorId] = useState('');
   const [selectedGuardianId, setSelectedGuardianId] = useState('');
 
+  useEffect(() => {
+    fetchMappings();
+    AdminService.adminGetUsers()
+      .then((res) => {
+        if (res) {
+          const loadedSeniors: { id: string; name: string; email: string }[] = [];
+          const loadedGuardians: { id: string; name: string; email: string }[] = [];
+          res.forEach((u: any) => {
+            const id = u.id || u.userId || String(Math.random());
+            const name = u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'User';
+            const email = u.primaryEmail || u.email || '—';
+            if (u.role === 'SENIOR') {
+              loadedSeniors.push({ id, name, email });
+            } else if (u.role === 'GUARDIAN') {
+              loadedGuardians.push({ id, name, email });
+            }
+          });
+          setSeniors(loadedSeniors);
+          setGuardians(loadedGuardians);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load users for dropdowns:', err);
+      });
+  }, []);
+
+  const fetchMappings = () => {
+    AdminService.adminGetMappings()
+      .then((res) => {
+        if (res) {
+          const mapped: MappingItem[] = res.map((m: any) => {
+            const senior = m.senior || {};
+            const guardian = m.guardian || {};
+
+            const seniorName = senior.firstName || senior.lastName 
+              ? `${senior.firstName || ''} ${senior.lastName || ''}`.trim() 
+              : m.seniorName || 'Senior';
+
+            const seniorEmail = senior.primaryEmail || senior.email || m.seniorEmail || '—';
+            const seniorPhone = senior.phoneNumber ? String(senior.phoneNumber) : m.seniorPhone || '—';
+
+            const guardianName = guardian.firstName || guardian.lastName 
+              ? `${guardian.firstName || ''} ${guardian.lastName || ''}`.trim() 
+              : m.guardianName || 'Guardian';
+
+            const guardianEmail = guardian.primaryEmail || guardian.email || m.guardianEmail || '—';
+
+            let dateStr = '—';
+            const rawDate = m.createdAt || m.createdDate || m.date;
+            if (rawDate) {
+              const d = new Date(rawDate);
+              dateStr = d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+            }
+
+            return {
+              id: m.id || m.mappingId || String(Math.random()),
+              seniorName,
+              seniorEmail,
+              seniorPhone,
+              guardianName,
+              guardianEmail,
+              status: m.status || 'APPROVED',
+              date: dateStr,
+            };
+          });
+          setMappings(mapped);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch mappings from API:', err);
+      });
+  };
+
   const handleDelink = (id: string) => {
-    setMappings((prev) => prev.filter((m) => m.id !== id));
+    SeniorService.deleteMapping(id)
+      .then(() => {
+        fetchMappings();
+      })
+      .catch((err) => {
+        console.error('Failed to delete mapping from API:', err);
+        alert('Failed to delete mapping from API.');
+      });
   };
 
   const handleCloseLinkDialog = () => {
@@ -142,26 +148,21 @@ export const Guardians: React.FC = () => {
 
   const handleLinkSenior = () => {
     if (!selectedSeniorId || !selectedGuardianId) return;
-    const senior = SENIORS.find((s) => s.id === selectedSeniorId);
-    const guardian = GUARDIANS.find((g) => g.id === selectedGuardianId);
-    if (!senior || !guardian) return;
 
-    const today = new Date();
-    const dateStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-    const newMapping: MappingItem = {
-      id: Date.now().toString(),
-      seniorName: senior.name,
-      seniorEmail: senior.email,
-      seniorPhone: '0000000000',
-      guardianName: guardian.name,
-      guardianEmail: guardian.email,
-      status: 'APPROVED',
-      date: dateStr,
+    const payload = {
+      guardianId: selectedGuardianId,
+      seniorId: selectedSeniorId,
     };
 
-    setMappings((prev) => [...prev, newMapping]);
-    handleCloseLinkDialog();
+    AdminService.adminMapGuardianSenior(payload)
+      .then(() => {
+        fetchMappings();
+        handleCloseLinkDialog();
+      })
+      .catch((err) => {
+        console.error('Failed to map guardian to senior in API:', err);
+        alert('Failed to map guardian to senior in API.');
+      });
   };
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
@@ -195,8 +196,8 @@ export const Guardians: React.FC = () => {
 
   const groupedRows = getGroupedRows();
   const pendingCount = mappings.filter((m) => m.status === 'PENDING').length;
-  const selectedSenior = SENIORS.find((s) => s.id === selectedSeniorId);
-  const selectedGuardian = GUARDIANS.find((g) => g.id === selectedGuardianId);
+  const selectedSenior = seniors.find((s) => s.id === selectedSeniorId);
+  const selectedGuardian = guardians.find((g) => g.id === selectedGuardianId);
   const canCreate = !!selectedSeniorId && !!selectedGuardianId;
 
   return (
@@ -490,7 +491,7 @@ export const Guardians: React.FC = () => {
                   <MenuItem value="" disabled sx={{ fontSize: '0.875rem', color: '#8C7E76' }}>
                     — Select Senior —
                   </MenuItem>
-                  {SENIORS.map((s) => (
+                  {seniors.map((s) => (
                     <MenuItem key={s.id} value={s.id} sx={{ fontSize: '0.875rem' }}>
                       {s.name}
                     </MenuItem>
@@ -564,7 +565,7 @@ export const Guardians: React.FC = () => {
                   <MenuItem value="" disabled sx={{ fontSize: '0.875rem', color: '#8C7E76' }}>
                     {selectedSeniorId ? '— Select Guardian —' : '— Select a Senior first —'}
                   </MenuItem>
-                  {GUARDIANS.map((g) => (
+                  {guardians.map((g) => (
                     <MenuItem key={g.id} value={g.id} sx={{ fontSize: '0.875rem' }}>
                       {g.name}
                     </MenuItem>

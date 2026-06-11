@@ -1,3 +1,14 @@
+/**
+ * client.ts — the "telephone" that talks to the backend server.
+ *
+ * One shared `request()` function handles everything every API call needs:
+ *  - prefixes the backend address (VITE_API_BASE_URL from .env)
+ *  - attaches your login token (unless `skipAuth` is set)
+ *  - serializes JSON bodies and query parameters
+ *  - turns bad responses into a typed ApiError
+ *
+ * The `client` object below is just a shorthand for the 5 HTTP verbs.
+ */
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || '';
 
 export class ApiError extends Error {
@@ -72,31 +83,21 @@ export async function request<T = any>(path: string, options: RequestOptions = {
   }
 
   const response = await fetch(url, init);
+  const text = await response.text();
+
+  let data: any;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
 
   if (!response.ok) {
-    let errorData: any;
-    try {
-      errorData = await response.json();
-    } catch {
-      errorData = await response.text();
-    }
-    const errorMessage = errorData?.message || errorData || `HTTP error! status: ${response.status}`;
-    throw new ApiError(errorMessage, response.status, errorData);
+    const errorMessage = data?.message || data || `HTTP error! status: ${response.status}`;
+    throw new ApiError(errorMessage, response.status, data);
   }
 
-  // Check if response is empty
-  const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
-    return response.json() as Promise<T>;
-  }
-
-  // Return text or generic success
-  const text = await response.text();
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    return text as unknown as T;
-  }
+  return data as T;
 }
 
 export const client = {

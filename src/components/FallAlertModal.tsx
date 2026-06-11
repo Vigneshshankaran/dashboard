@@ -19,9 +19,24 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Step = 'action' | 'calling' | 'confirmed' | 'false-alarm';
 
+/** Real resident data for the alert — passed in by the page that opens the modal. */
+export interface FallAlertPatient {
+  name?: string;
+  age?: number | string;
+  gender?: string;
+  condition?: string;
+  room?: string;
+  device?: string;
+  battery?: number | string;
+  alertTime?: string;
+}
+
 interface FallAlertModalProps {
   open: boolean;
   onClose: () => void;
+  patient?: FallAlertPatient;
+  /** Name of the logged-in staff member responding to the alert. */
+  respondedBy?: string;
 }
 
 // ─── Elapsed timer formatter ──────────────────────────────────────────────────
@@ -30,22 +45,6 @@ function fmtTime(s: number) {
   const sec = String(s % 60).padStart(2, '0');
   return `${m}:${sec}`;
 }
-
-// ─── Patient data ─────────────────────────────────────────────────────────────
-const PATIENT = {
-  name: 'Meena Devi',
-  initials: 'MD',
-  age: 82,
-  gender: 'Female',
-  risk: 'High Fall Risk',
-  condition: 'Osteoporosis',
-  wing: 'Wing C',
-  floor: '2nd Floor',
-  room: 'Room 12-B',
-  device: 'EV-07B #4421',
-  battery: 74,
-  alertTime: '09:14 AM',
-};
 
 // ─── Section label ────────────────────────────────────────────────────────────
 const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -97,9 +96,25 @@ const InfoRow: React.FC<{ label: string; value: string; valueColor?: string }> =
 );
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export const FallAlertModal: React.FC<FallAlertModalProps> = ({ open, onClose }) => {
+export const FallAlertModal: React.FC<FallAlertModalProps> = ({ open, onClose, patient, respondedBy }) => {
   const [step, setStep] = useState<Step>('action');
   const [elapsed, setElapsed] = useState(0);
+
+  // Normalize incoming data — anything missing shows as "—", never fake values
+  const PATIENT = {
+    name: patient?.name || '—',
+    initials: patient?.name
+      ? patient.name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase()
+      : '?',
+    age: patient?.age ?? '—',
+    gender: patient?.gender || '—',
+    condition: patient?.condition || '',
+    room: patient?.room || '—',
+    device: patient?.device || '—',
+    battery: typeof patient?.battery === 'number' ? `${patient.battery}%` : '—',
+    alertTime: patient?.alertTime || '—',
+  };
+  const responder = respondedBy || '—';
 
   // Start timer when modal opens
   useEffect(() => {
@@ -206,16 +221,16 @@ export const FallAlertModal: React.FC<FallAlertModalProps> = ({ open, onClose })
           </Typography>
           <Typography sx={{ color: '#fff', fontWeight: 800, fontSize: '1.15rem', lineHeight: 1.2 }}>
             {isDanger
-              ? 'Fall Detected — Meena Devi'
+              ? `Fall Detected — ${PATIENT.name}`
               : step === 'confirmed'
               ? 'Ambulance Dispatched'
               : 'Marked as False Alarm'}
           </Typography>
           <Typography sx={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.73rem', mt: 0.3 }}>
             {isDanger
-              ? `Impact confirmed by ${PATIENT.device} · ${PATIENT.wing} · ${PATIENT.room}`
+              ? `Impact reported by device ${PATIENT.device} · Room ${PATIENT.room}`
               : step === 'confirmed'
-              ? 'Dial4242 notified · ERP incident ticket created'
+              ? 'Emergency services notified'
               : 'Alert closed · Event recorded for calibration review'}
           </Typography>
         </Box>
@@ -257,27 +272,29 @@ export const FallAlertModal: React.FC<FallAlertModalProps> = ({ open, onClose })
                 {PATIENT.name}
               </Typography>
               <Typography sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', mt: 0.1 }}>
-                {PATIENT.age} yrs · {PATIENT.gender} · {PATIENT.condition}
+                {PATIENT.age} yrs · {PATIENT.gender}
               </Typography>
-              <Chip
-                label={PATIENT.risk}
-                size="small"
-                sx={{
-                  mt: 0.5,
-                  height: 18,
-                  fontSize: '0.62rem',
-                  fontWeight: 700,
-                  bgcolor: 'rgba(220,38,38,0.2)',
-                  color: '#FCA5A5',
-                  border: '1px solid rgba(220,38,38,0.3)',
-                  borderRadius: '4px',
-                }}
-              />
+              {PATIENT.condition && (
+                <Chip
+                  label={PATIENT.condition}
+                  size="small"
+                  sx={{
+                    mt: 0.5,
+                    height: 18,
+                    fontSize: '0.62rem',
+                    fontWeight: 700,
+                    bgcolor: 'rgba(220,38,38,0.2)',
+                    color: '#FCA5A5',
+                    border: '1px solid rgba(220,38,38,0.3)',
+                    borderRadius: '4px',
+                  }}
+                />
+              )}
             </Box>
           </Box>
           <Box sx={{ textAlign: 'right' }}>
             <Typography sx={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.65rem' }}>
-              {PATIENT.wing} · {PATIENT.floor}
+              ROOM
             </Typography>
             <Typography sx={{ color: '#FBBF24', fontWeight: 800, fontSize: '1rem', mt: 0.25 }}>
               {PATIENT.room}
@@ -365,7 +382,7 @@ export const FallAlertModal: React.FC<FallAlertModalProps> = ({ open, onClose })
             </Typography>
           </Box>
           <Typography sx={{ color: '#34D399', fontWeight: 700, fontSize: '0.85rem' }}>
-            {PATIENT.battery}%
+            {PATIENT.battery}
           </Typography>
         </Box>
       </Box>
@@ -554,7 +571,7 @@ export const FallAlertModal: React.FC<FallAlertModalProps> = ({ open, onClose })
       ───────────────────────────────────────────────────────────────────── */}
       {step === 'confirmed' && (
         <Box sx={{ px: 3, pt: 2, pb: 3 }}>
-          <Label>ERP Incident Ticket — Auto Created</Label>
+          <Label>Incident Record</Label>
           <Box
             sx={{
               bgcolor: 'rgba(255,255,255,0.04)',
@@ -566,52 +583,11 @@ export const FallAlertModal: React.FC<FallAlertModalProps> = ({ open, onClose })
               mb: 2,
             }}
           >
-            <InfoRow label="Ticket ID"     value="#INC-2026-0498" />
             <InfoRow label="Patient"       value={`${PATIENT.name} · ${PATIENT.room}`} />
             <InfoRow label="Type"          value="Fall — Impact Confirmed" />
             <InfoRow label="Triggered"     value={`${PATIENT.alertTime} · ${PATIENT.device}`} />
-            <InfoRow label="Confirmed by"  value="Ravi Krishnamurthy (Admin)" />
-            <InfoRow label="Status"        value="Open — Ambulance En Route" valueColor="#4ADE80" />
-          </Box>
-
-          {/* Ambulance status card */}
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              bgcolor: 'rgba(22,163,74,0.08)',
-              border: '1px solid rgba(22,163,74,0.2)',
-              borderRadius: '10px',
-              px: 2,
-              py: 1.5,
-              mb: 2,
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <Typography sx={{ fontSize: '1.4rem' }}>🚑</Typography>
-              <Box>
-                <Typography sx={{ color: '#fff', fontWeight: 700, fontSize: '0.88rem' }}>
-                  Dial4242 Ambulance — Dispatched
-                </Typography>
-                <Typography sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', mt: 0.1 }}>
-                  ETA ~8 min · Vehicle KA-01-AA-4242
-                </Typography>
-              </Box>
-            </Box>
-            <Chip
-              label="EN ROUTE"
-              size="small"
-              sx={{
-                bgcolor: '#16A34A',
-                color: '#fff',
-                fontWeight: 800,
-                fontSize: '0.62rem',
-                letterSpacing: '0.5px',
-                borderRadius: '6px',
-                height: 24,
-              }}
-            />
+            <InfoRow label="Confirmed by"  value={responder} />
+            <InfoRow label="Status"        value="Open — Emergency Response" valueColor="#4ADE80" />
           </Box>
 
           <Button
@@ -651,9 +627,8 @@ export const FallAlertModal: React.FC<FallAlertModalProps> = ({ open, onClose })
               mb: 2,
             }}
           >
-            <InfoRow label="Event ID"   value="#FA-2026-0498" />
             <InfoRow label="Patient"    value={`${PATIENT.name} · ${PATIENT.room}`} />
-            <InfoRow label="Marked by"  value="Ravi Krishnamurthy (Admin)" />
+            <InfoRow label="Marked by"  value={responder} />
             <InfoRow label="Elapsed"    value={fmtTime(elapsed)} />
             <InfoRow label="Status"     value="False Alarm — Logged & Closed" valueColor="#FBBF24" />
           </Box>

@@ -1,9 +1,20 @@
+/**
+ * services.ts — the "phone book" of the backend.
+ *
+ * Every action the app can ask the backend to do lives here, grouped by
+ * feature (Auth, Profile, Seniors, Monitors, Devices, Alarms, Admin, ...).
+ * Pages never call fetch() directly — they import a service from this file.
+ *
+ * Conventions:
+ *  - `client.get/post/put/patch/delete` → normal authenticated calls
+ *  - `request(...)` → only for calls that need special handling
+ *    (skipAuth for public endpoints, or custom headers)
+ */
 import { client, request } from './client';
 import type {
   UUID,
   UserRole,
   UserSignInRequest,
-  MobileSignInRequest,
   EmailSignUpRequest,
   UpdateProfileRequest,
   UserLoginDTO,
@@ -33,17 +44,6 @@ import type {
 export const AuthService = {
   signin: (body: UserSignInRequest) =>
     request('/v1/auth/signin', { method: 'POST', body, skipAuth: true }),
-
-  signinMobile: (body: MobileSignInRequest) =>
-    request('/v1/auth/signin/mobile', { method: 'POST', body, skipAuth: true }),
-
-  signinMobileVerify: (body: MobileSignInRequest, xPlatform?: string) =>
-    request('/v1/auth/signin/mobile/verify', {
-      method: 'POST',
-      body,
-      headers: xPlatform ? { 'X-Platform': xPlatform } : undefined,
-      skipAuth: true,
-    }),
 
   signupEmail: (body: EmailSignUpRequest) =>
     request('/v1/auth/signup/email', { method: 'POST', body, skipAuth: true }),
@@ -182,16 +182,16 @@ export const DashboardService = {
 // 7. Device Registration Services
 export const DeviceService = {
   getDeviceNetworkTypes: () =>
-    request('/v1/devices/network-types', { method: 'GET' }),
+    client.get('/v1/devices/network-types'),
 
   registerDevice: (body: DeviceRegistrationRequest) =>
     request('/v1/devices/register', { method: 'POST', body, skipAuth: true }),
 
   rotateDeviceCredentials: (deviceUUID: UUID) =>
-    request(`/v1/devices/${deviceUUID}/credentials/rotate`, { method: 'POST' }),
+    client.post(`/v1/devices/${deviceUUID}/credentials/rotate`),
 
   revokeDevice: (deviceUUID: UUID) =>
-    request(`/v1/devices/${deviceUUID}/revoke`, { method: 'POST' }),
+    client.post(`/v1/devices/${deviceUUID}/revoke`),
 
   getDeviceDetailsByImei: (imei: string) =>
     request(`/v1/devices/details/by-imei/${imei}`, { method: 'GET', skipAuth: true }),
@@ -217,13 +217,13 @@ export const DeviceAssignmentService = {
     }),
 
   getDeviceAssignment: (deviceId: UUID) =>
-    request(`/v1/devices/assignments/get/${deviceId}`, { method: 'GET' }),
+    client.get(`/v1/devices/assignments/get/${deviceId}`),
 
   getDeviceAssignmentAuditLogs: (assignmentId: UUID) =>
-    request(`/v1/devices/assignments/audit-logs/${assignmentId}`, { method: 'GET' }), // ADMIN ONLY
+    client.get(`/v1/devices/assignments/audit-logs/${assignmentId}`), // ADMIN ONLY
 
   getSeniorDevices: (seniorUUID: UUID) =>
-    request(`/v1/devices/assignments/seniors/${seniorUUID}/devices`, { method: 'GET' }),
+    client.get(`/v1/devices/assignments/seniors/${seniorUUID}/devices`),
 };
 
 // 9. Vitals Services
@@ -379,5 +379,5 @@ export const ActuatorService = {
     request('/v1/actuator/health/ready', { method: 'GET', skipAuth: true }),
 
   getHealthInternalDetails: () =>
-    request('/v1/actuator/health/internal/details', { method: 'GET' }), // Authentication checks might be localhost-only on server side
+    client.get('/v1/actuator/health/internal/details'), // Authentication checks might be localhost-only on server side
 };

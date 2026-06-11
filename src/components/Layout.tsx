@@ -14,9 +14,10 @@ interface LayoutProps {
     role: string;
     avatarBg: string;
   };
+  onLogout: () => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, profile }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange, profile, onLogout }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
 
@@ -49,10 +50,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
           },
         }}
       >
-        <Sidebar activeTab={activeTab} profile={profile} onTabChange={(tab) => {
-          onTabChange(tab);
-          setMobileOpen(false); // Close drawer on item select
-        }} />
+        <Sidebar 
+          activeTab={activeTab} 
+          profile={profile} 
+          onTabChange={(tab) => {
+            onTabChange(tab);
+            setMobileOpen(false); // Close drawer on item select
+          }} 
+          onLogout={onLogout}
+        />
       </Drawer>
 
       {/* 2. Sidebar for Desktop (Permanent Fixed) */}
@@ -70,6 +76,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
           onTabChange={onTabChange} 
           desktopCollapsed={desktopCollapsed}
           onDesktopCollapseToggle={() => setDesktopCollapsed(!desktopCollapsed)}
+          onLogout={onLogout}
         />
       </Box>
 
@@ -85,12 +92,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
         }}
       >
         {/* Topbar */}
-        <Topbar 
-          title={getTabTitle(activeTab)} 
-          activeTab={activeTab}
-          profile={profile} 
-          onMobileMenuToggle={handleDrawerToggle} 
+        <Topbar
+          title={getTabTitle(activeTab)}
+          profile={profile}
+          onMobileMenuToggle={handleDrawerToggle}
+          onNavigate={onTabChange}
           desktopCollapsed={desktopCollapsed}
+          onLogout={onLogout}
         />
 
         {/* Content workspace wrapper */}

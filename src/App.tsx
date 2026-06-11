@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { theme } from './theme/theme';
@@ -10,27 +10,85 @@ import { Guardians } from './pages/Guardians';
 import { Monitors } from './pages/Monitors';
 import { Alerts } from './pages/Alerts';
 import { Profile } from './pages/Profile';
-import { Seniors } from './pages/Seniors'; // Added Seniors import
+import { Seniors } from './pages/Seniors';
 import { Card, Typography, Box } from '@mui/material';
+import { Login } from './pages/Login';
+import { ProfileService, AuthService } from './api';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('authToken'));
 
   // Hoisted Admin Profile State
   const [profile, setProfile] = useState({
-    name: 'Healthsoft Admin Team',
-    email: 'healthsoftcare@gmail.com',
-    phone: '1234512345',
-    role: 'ADMIN',
+    name: '',
+    email: '',
+    phone: '',
+    role: '',
     avatarBg: '#D45529', // SeniorCare Theme primary orange-brown
   });
+
+  const handleLogout = () => {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (refreshToken) {
+      AuthService.logout(refreshToken).catch((err) => {
+        console.warn('Logout API call failed:', err);
+      });
+    }
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
+    setIsAuthenticated(false);
+    setProfile({
+      name: '',
+      email: '',
+      phone: '',
+      role: '',
+      avatarBg: '#D45529',
+    });
+  };
+
+  const fetchProfile = () => {
+    ProfileService.getProfile()
+      .then((res) => {
+        // Backend may wrap the payload in { data: ... } and uses snake_case field names
+        const data = res?.data ?? res;
+        if (data) {
+          const firstName = data.first_name || data.firstName || '';
+          const lastName = data.last_name || data.lastName || '';
+          const phoneNumber = data.phone_number || data.phoneNumber || '';
+          setProfile({
+            name:
+              data.name ||
+              `${firstName} ${lastName}`.trim() ||
+              data.username ||
+              data.userName ||
+              (data.email ? String(data.email).split('@')[0] : '') ||
+              'User',
+            email: data.email || data.primaryEmail || '',
+            phone: phoneNumber ? String(phoneNumber) : '',
+            role: data.role || '',
+            avatarBg: '#D45529',
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load profile:', err);
+        handleLogout();
+      });
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchProfile();
+    }
+  }, [isAuthenticated]);
 
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard />;
-      case 'seniors': // Added Seniors route case
-        return <Seniors />;
+        return <Dashboard role={profile.role} onNavigate={setActiveTab} />;
+      case 'seniors':
+        return <Seniors currentUserName={profile.name} currentUserRole={profile.role} />;
       case 'users':
         return <Users />;
       case 'devices':
@@ -40,7 +98,7 @@ const App: React.FC = () => {
       case 'monitors':
         return <Monitors />;
       case 'alerts':
-        return <Alerts />;
+        return <Alerts role={profile.role} />;
       case 'profile':
         return <Profile profile={profile} onUpdateProfile={setProfile} />;
       default:
@@ -59,10 +117,19 @@ const App: React.FC = () => {
     }
   };
 
+  if (!isAuthenticated) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Login onLoginSuccess={() => setIsAuthenticated(true)} />
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Layout activeTab={activeTab} profile={profile} onTabChange={setActiveTab}>
+      <Layout activeTab={activeTab} profile={profile} onTabChange={setActiveTab} onLogout={handleLogout}>
         {renderContent()}
       </Layout>
     </ThemeProvider>

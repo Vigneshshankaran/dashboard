@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -9,7 +9,6 @@ import {
   Button,
   Tabs,
   Tab,
-  IconButton,
   Divider,
   Switch,
   TextField,
@@ -23,26 +22,23 @@ import {
   TableRow,
   Paper,
 } from '@mui/material';
-import PhoneIcon from '@mui/icons-material/Phone';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import SpeedIcon from '@mui/icons-material/Speed';
 import OpacityIcon from '@mui/icons-material/Opacity';
 import ThermostatIcon from '@mui/icons-material/Thermostat';
 import WaterDropIcon from '@mui/icons-material/WaterDrop';
 import AirIcon from '@mui/icons-material/Air';
-import ChatIcon from '@mui/icons-material/Chat';
 import WarningIcon from '@mui/icons-material/Warning';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import InfoIcon from '@mui/icons-material/Info';
-import AddIcon from '@mui/icons-material/Add';
 import SendIcon from '@mui/icons-material/Send';
 import ErrorIcon from '@mui/icons-material/Error';
-import SecurityIcon from '@mui/icons-material/Security';
 import DeviceHubIcon from '@mui/icons-material/DeviceHub';
 
 import { FallAlertModal } from '../components/FallAlertModal';
+import { SeniorService, DeviceAssignmentService, AlarmService, ComplianceService } from '../api';
+
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 interface ActivityLogItem {
@@ -55,97 +51,278 @@ interface ActivityLogItem {
   content: string;
 }
 
-export const Seniors: React.FC = () => {
+interface SeniorsProps {
+  currentUserName?: string;
+  currentUserRole?: string;
+}
+
+export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRole }) => {
   const [openFallAlert, setOpenFallAlert] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState(0);
+
+  // API States
+  const [selectedSenior, setSelectedSenior] = useState<any>({
+    id: '',
+    name: '',
+    gender: '',
+    age: 0,
+    dob: '',
+    bloodGroup: '',
+    room: '',
+    residentId: '',
+    admissionDate: '',
+    mobilityAid: '',
+    fallsCount: 0,
+    medCompliance: 0,
+    devicesCount: 0,
+    latestSpo2: 0,
+    latestBp: '',
+    guardiansCount: 0,
+    latestHeartRate: 0,
+    latestTemperature: 0,
+    latestBloodGlucose: 0,
+    latestRespRate: 0,
+  });
+
+  const [seniorsList, setSeniorsList] = useState<any[]>([]);
+
+  const [seniorDevices, setSeniorDevices] = useState<any[]>([]);
+
+  const [seniorAlerts, setSeniorAlerts] = useState<any[]>([]);
+
+  const [seniorGuardians, setSeniorGuardians] = useState<any[]>([]);
+
+  const [seniorReports, setSeniorReports] = useState<any[]>([]);
+
+  // Load Seniors from API
+  useEffect(() => {
+    SeniorService.getMySeniors()
+      .then((res) => {
+        if (res) {
+          const list = res.map((s: any) => {
+            const name = s.name || `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Unnamed Senior';
+            let age = 0;
+            let dobStr = '—';
+            if (s.dateOfBirth) {
+              const dobDate = new Date(s.dateOfBirth);
+              dobStr = dobDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+              const diff = Date.now() - dobDate.getTime();
+              age = Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25)) || 0;
+            }
+            return {
+              id: s.id || s.seniorId || '—',
+              name,
+              gender: s.gender || '—',
+              age,
+              dob: dobStr,
+              bloodGroup: s.bloodGroup || '—',
+              room: s.room || '—',
+              residentId: s.residentId || s.id || '—',
+              admissionDate: s.admissionDate || '—',
+              mobilityAid: s.mobilityAid || '—',
+              fallsCount: s.fallsCount ?? 0,
+              medCompliance: s.medCompliance ?? 0,
+              devicesCount: s.devicesCount ?? 0,
+              latestSpo2: s.latestSpo2 ?? 0,
+              latestBp: s.latestBp || '—',
+              guardiansCount: s.guardiansCount ?? 0,
+              latestHeartRate: s.latestHeartRate ?? 0,
+              latestTemperature: s.latestTemperature ?? 0,
+              latestBloodGlucose: s.latestBloodGlucose ?? 0,
+              latestRespRate: s.latestRespRate ?? 0,
+              nationality: s.nationality || '—',
+              language: s.language || '—',
+              religion: s.religion || '—',
+              primaryPhysician: s.primaryPhysician || '—',
+              physicianPhone: s.physicianPhone || '—',
+              caregiver: s.caregiver || '—',
+              floorAttendant: s.floorAttendant || '—',
+              dietitian: s.dietitian || '—',
+              physiotherapist: s.physiotherapist || '—',
+              fallRisk: s.fallRisk || '—',
+              wanderRisk: s.wanderRisk || '—',
+              cardiacRisk: s.cardiacRisk || '—',
+              activeConditions: s.activeConditions || (s.medicalConditions ? String(s.medicalConditions).split(',').map((c: string) => c.trim()).filter(Boolean) : []),
+              allergies: s.allergies || '',
+            };
+          });
+          setSeniorsList(list);
+          if (list.length > 0) {
+            setSelectedSenior(list[0]);
+          } else {
+            setSelectedSenior({
+              id: '',
+              name: '',
+              gender: '',
+              age: 0,
+              dob: '',
+              bloodGroup: '',
+              room: '',
+              residentId: '',
+              admissionDate: '',
+              mobilityAid: '',
+              fallsCount: 0,
+              medCompliance: 0,
+              devicesCount: 0,
+              latestSpo2: 0,
+              latestBp: '',
+              guardiansCount: 0,
+              latestHeartRate: 0,
+              latestTemperature: 0,
+              latestBloodGlucose: 0,
+              latestRespRate: 0,
+              nationality: '—',
+              language: '—',
+              religion: '—',
+              primaryPhysician: '—',
+              physicianPhone: '—',
+              caregiver: '—',
+              floorAttendant: '—',
+              dietitian: '—',
+              physiotherapist: '—',
+              fallRisk: '—',
+              wanderRisk: '—',
+              cardiacRisk: '—',
+              activeConditions: [],
+            });
+          }
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load seniors from API:', err);
+      });
+  }, []);
+
+  // Load selected senior's details (devices, alarms, etc.)
+  useEffect(() => {
+    if (!selectedSenior || !selectedSenior.id) return;
+
+    // Fetch assigned devices — only show what the backend actually reports
+    DeviceAssignmentService.getSeniorDevices(selectedSenior.id)
+      .then((devicesRes) => {
+        const list = (devicesRes || []).map((d: any, idx: number) => ({
+          id: d.id || d.deviceUUID || d.imei || String(idx),
+          name: d.deviceName || d.name || 'Wearable Device',
+          deviceId: d.deviceTypeId ? `#${d.deviceTypeId}` : '—',
+          imei: d.imei || d.deviceIdentifier || '—',
+          status: d.status === 'BLOCKED' ? 'Blocked' : (d.status || 'Active'),
+          battery: typeof d.batteryLevel === 'number' ? d.batteryLevel : '—',
+          firmware: d.firmwareVersion || '—',
+          network: d.networkType || '—',
+          fallSensor: d.fallAlarmStatus ? 'Active' : '—',
+          gps: d.positionValid ? 'Locked' : '—',
+          lastSync: d.serverTimestamp
+            ? new Date(d.serverTimestamp).toLocaleString('en-US', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+            : '—',
+          alerts: [],
+        }));
+        setSeniorDevices(list);
+      })
+      .catch((err) => {
+        console.warn('Failed to load devices for senior from API:', err);
+        setSeniorDevices([]);
+      });
+
+    // Fetch alarms
+    AlarmService.getAllAlarms()
+      .then((alarmsRes) => {
+        const filtered = (alarmsRes || []).filter((a: any) => a.deviceUUID === selectedSenior.id || !a.deviceUUID);
+        const list = filtered.map((a: any, idx: number) => {
+          let dateStr = '—';
+          if (a.timestamp) {
+            const d = new Date(a.timestamp);
+            dateStr = d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+          }
+          return {
+            id: String(a.id ?? idx),
+            date: dateStr,
+            relative: '',
+            type: a.alarmType || 'Alarm',
+            severity: a.severity || 'MEDIUM',
+            device: a.deviceUUID ? a.deviceUUID.slice(0, 8) : '—',
+            description: a.description || '—',
+            status: a.resolved ? 'Resolved' : 'Open',
+            resolvedBy: a.resolvedBy || '—',
+          };
+        });
+        setSeniorAlerts(list);
+      })
+      .catch((err) => {
+        console.warn('Failed to load alarms from API:', err);
+        setSeniorAlerts([]);
+      });
+
+    // Fetch uploaded health/compliance reports for this senior
+    ComplianceService.getReportsOfSenior(selectedSenior.id)
+      .then((reportsRes) => {
+        const list = (reportsRes || []).map((r: any, idx: number) => ({
+          id: r.id || String(idx),
+          name: r.reportName || 'Report',
+          type: r.reportType || '—',
+          url: r.reportUrl || '',
+        }));
+        setSeniorReports(list);
+      })
+      .catch((err) => {
+        console.warn('Failed to load reports for senior from API:', err);
+        setSeniorReports([]);
+      });
+
+    // Fetch guardians — no invented ages/cities; missing fields show as blank
+    SeniorService.getMyGuardians()
+      .then((guardiansRes) => {
+        const list = (guardiansRes || []).map((g: any, idx: number) => ({
+          id: g.id || String(idx),
+          name: g.name || `${g.firstName || ''} ${g.lastName || ''}`.trim() || 'Guardian',
+          relationship: g.relationship || 'Guardian',
+          age: g.age ?? null,
+          location: g.location || g.city || '',
+          email: g.email || '—',
+          phone: g.phoneNumber ? String(g.phoneNumber) : '—',
+          whatsapp: Boolean(g.whatsapp),
+          call: Boolean(g.phoneNumber),
+          notes: g.notes || '',
+        }));
+        setSeniorGuardians(list);
+      })
+      .catch((err) => {
+        console.warn('Failed to load guardians from API:', err);
+        setSeniorGuardians([]);
+      });
+  }, [selectedSenior]);
+
+  // ─── State for Alert History tab ───────────────────────────────────────────
+  const [alertTypeFilter, setAlertTypeFilter] = useState('ALL');
+
+  const filteredSeniorAlerts = seniorAlerts.filter(
+    (a) => alertTypeFilter === 'ALL' || String(a.type).toLowerCase().includes(alertTypeFilter.toLowerCase())
+  );
+
+  // Download the visible alert history as a CSV file
+  const handleExportAlertsCsv = () => {
+    const header = ['Date', 'Type', 'Severity', 'Device', 'Description', 'Status', 'Resolved By'];
+    const rows = filteredSeniorAlerts.map((a) =>
+      [a.date, a.type, a.severity, a.device, a.description, a.status, a.resolvedBy]
+        .map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`)
+        .join(',')
+    );
+    const csv = [header.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `alerts-${selectedSenior.residentId || 'senior'}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
 
   // ─── State for Notes & Activity tab ────────────────────────────────────────
   const [noteText, setNoteText] = useState('');
   const [noteCategory, setNoteCategory] = useState<'GENERAL' | 'INCIDENT' | 'MEDICAL' | 'DEVICE'>('GENERAL');
-  const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([
-    {
-      id: '1',
-      author: 'Ravi Krishnamurthy',
-      role: 'Admin',
-      avatarBg: '#3B82F6',
-      time: 'Today, 09:14 AM',
-      category: 'INCIDENT',
-      content: 'Fall alert triggered for Meena Devi — EV-07B #4421, Wing C. Proceeding through confirmation protocol. Guardian Kavitha Meena auto-notified via WhatsApp + SMS.',
-    },
-    {
-      id: '2',
-      author: 'Priya K.',
-      role: 'Caregiver',
-      avatarBg: '#D45529',
-      time: 'Today, 07:45 AM',
-      category: 'MEDICAL',
-      content: 'Morning vitals recorded. BP elevated at 148/94 — noted for physician review. Senior was cooperative. Complained of knee pain during morning walk. Physiotherapy session reminder sent to Kiran Raj.',
-    },
-    {
-      id: '3',
-      author: 'Lakshmi K.',
-      role: 'Caregiver',
-      avatarBg: '#10B981',
-      time: 'Yesterday, 08:20 PM',
-      category: 'MEDICAL',
-      content: 'Evening medication — Metformin missed again. Senior said she "already took it" (likely confused with calcium supplement). Gently redirected, but she declined. Noted for physician review. Donepezil taken at 9:45 PM.',
-    },
-    {
-      id: '4',
-      author: 'Rajan J.',
-      role: 'Attendant',
-      avatarBg: '#F59E0B',
-      time: 'Yesterday, 10:48 PM',
-      category: 'INCIDENT',
-      content: 'Bed exit alert at 10:32 PM. Checked on senior — she was awake and trying to get water from her table. Assisted her back to bed, placed water bottle within reach. No fall or injury.',
-    },
-    {
-      id: '5',
-      author: 'Dr. Suresh Babu',
-      role: 'Physician',
-      avatarBg: '#3B82F6',
-      time: 'May 20, 11:00 AM',
-      category: 'MEDICAL',
-      content: 'Reviewed Meena Devi. HbA1c remains high at 8.1%. Increasing focus on ensuring Metformin compliance — spoke to Kavitha (daughter) about strategies to remind Amma. BP still elevated — will refer to cardiologist June 5 if no improvement. Next review scheduled June 20.',
-    },
-    {
-      id: '6',
-      author: 'Kiran Raj',
-      role: 'Physiotherapist',
-      avatarBg: '#6B7280',
-      time: 'May 19, 10:30 AM',
-      category: 'GENERAL',
-      content: 'Physiotherapy session completed — 35 min. Focused on lower limb strengthening and balance training. Senior showed improvement in single-leg stand (3 sec -> 5 sec). Recommended anti-skid slippers — requested admin to procure. Next session Thursday.',
-    },
-    {
-      id: '7',
-      author: 'Ravi Krishnamurthy',
-      role: 'Admin',
-      avatarBg: '#3B82F6',
-      time: 'May 14, 02:52 PM',
-      category: 'DEVICE',
-      content: 'Fall alert May 14 — marked as false alarm after calling senior (answered, was seated and had bumped device on table edge). EV-07B sensitivity review logged — possibly needs recalibration. Ticket raised with Healthsoft support.',
-    },
-  ]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
 
   // ─── State for Guardian Preferences ───────────────────────────────────────
-  const [kavithaPrefs, setKavithaPrefs] = useState({
-    fallAlert: true,
-    missedDoses: true,
-    lowBattery: false,
-    geofence: true,
-    sosButton: true,
-    weeklyReport: true,
-  });
 
-  const [sureshPrefs, setSureshPrefs] = useState({
-    fallAlert: true,
-    missedDoses: false,
-    lowBattery: true,
-    geofence: true,
-    sosButton: true,
-    weeklyReport: false,
-  });
+  const [guardianPrefs, setGuardianPrefs] = useState<Record<string, any>>({});
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
@@ -157,10 +334,10 @@ export const Seniors: React.FC = () => {
 
     const newLog: ActivityLogItem = {
       id: Date.now().toString(),
-      author: 'Ravi Krishnamurthy',
-      role: 'Admin',
+      author: currentUserName || 'Staff',
+      role: currentUserRole || 'Staff',
       avatarBg: '#3B82F6',
-      time: 'Just now',
+      time: new Date().toLocaleString('en-US', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
       category: noteCategory,
       content: noteText.trim(),
     };
@@ -170,9 +347,10 @@ export const Seniors: React.FC = () => {
   };
 
   // Helper count notes
-  const totalNotes = activityLogs.length + 35; // base offset
-  const incidentNotesCount = activityLogs.filter(l => l.category === 'INCIDENT').length + 6;
-  const medicalNotesCount = activityLogs.filter(l => l.category === 'MEDICAL').length + 14;
+  const totalNotes = activityLogs.length;
+  const incidentNotesCount = activityLogs.filter(l => l.category === 'INCIDENT').length;
+  const medicalNotesCount = activityLogs.filter(l => l.category === 'MEDICAL').length;
+  const lastNoteTime = activityLogs.length > 0 ? activityLogs[0].time : '—';
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
@@ -211,26 +389,55 @@ export const Seniors: React.FC = () => {
                 border: '2.5px solid #F59E0B',
               }}
             >
-              MD
+              {selectedSenior.name ? selectedSenior.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : '?'}
             </Avatar>
 
             <Box>
-              <Typography variant="h5" sx={{ fontWeight: 800, color: '#FFFFFF', mb: 0.5 }}>
-                Meena Devi
-              </Typography>
+              {seniorsList.length > 1 ? (
+                <Select
+                  value={selectedSenior.id}
+                  onChange={(e) => {
+                    const found = seniorsList.find(s => s.id === e.target.value);
+                    if (found) setSelectedSenior(found);
+                  }}
+                  size="small"
+                  sx={{
+                    color: '#FFFFFF',
+                    fontWeight: 800,
+                    fontSize: '1.25rem',
+                    mb: 0.5,
+                    '.MuiOutlinedInput-notchedOutline': { border: 'none' },
+                    '&:hover .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                    '.MuiSelect-icon': { color: '#FFFFFF' },
+                    p: 0,
+                    ml: -1.5,
+                  }}
+                >
+                  {seniorsList.map((s) => (
+                    <MenuItem key={s.id} value={s.id}>
+                      {s.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              ) : (
+                <Typography variant="h5" sx={{ fontWeight: 800, color: '#FFFFFF', mb: 0.5 }}>
+                  {selectedSenior.name}
+                </Typography>
+              )}
               <Typography variant="body2" sx={{ color: '#94A3B8', fontWeight: 500, mb: 1 }}>
-                Female · 82 years · DOB: March 14, 1944 · Blood Group: O+
+                {selectedSenior.gender} · {selectedSenior.age} years · DOB: {selectedSenior.dob} · Blood Group: {selectedSenior.bloodGroup}
               </Typography>
 
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 <Chip
                   icon={<LocationOnIcon sx={{ '&&': { color: '#D97706', fontSize: 13 } }} />}
-                  label="Room 12-B - Wing C"
+                  label={selectedSenior.room}
                   size="small"
                   sx={{ bgcolor: '#FEF3C7', color: '#D97706', fontWeight: 700, fontSize: '0.7rem', borderRadius: '6px' }}
                 />
                 <Chip
-                  label="High Fall Risk"
+                  label={selectedSenior.mobilityAid || 'Active Resident'}
                   size="small"
                   sx={{ bgcolor: '#FEE2E2', color: '#DC2626', fontWeight: 700, fontSize: '0.7rem', borderRadius: '6px' }}
                 />
@@ -240,12 +447,12 @@ export const Seniors: React.FC = () => {
                   sx={{ bgcolor: '#D1FAE5', color: '#059669', fontWeight: 700, fontSize: '0.7rem', borderRadius: '6px' }}
                 />
                 <Chip
-                  label="Admitted Feb 12, 2024"
+                  label={`Admitted ${selectedSenior.admissionDate}`}
                   size="small"
                   sx={{ bgcolor: 'rgba(255, 255, 255, 0.08)', color: '#E2E8F0', fontWeight: 600, fontSize: '0.7rem', borderRadius: '6px' }}
                 />
                 <Chip
-                  label="SR-001"
+                  label={selectedSenior.residentId}
                   size="small"
                   sx={{ bgcolor: 'rgba(255, 255, 255, 0.08)', color: '#E2E8F0', fontWeight: 600, fontSize: '0.7rem', borderRadius: '6px' }}
                 />
@@ -274,26 +481,6 @@ export const Seniors: React.FC = () => {
             >
               Active Fall Alert
             </Button>
-            <Button
-              variant="outlined"
-              startIcon={<PhoneIcon />}
-              sx={{
-                borderColor: 'rgba(255, 255, 255, 0.2)',
-                color: '#FFFFFF',
-                fontWeight: 700,
-                textTransform: 'none',
-                px: 2.5,
-                py: 1,
-                fontSize: '0.825rem',
-                borderRadius: '8px',
-                '&:hover': {
-                  borderColor: '#FFFFFF',
-                  bgcolor: 'rgba(255, 255, 255, 0.08)',
-                },
-              }}
-            >
-              Call Room
-            </Button>
           </Box>
         </Box>
 
@@ -304,7 +491,7 @@ export const Seniors: React.FC = () => {
           <Grid size={{ xs: 6, sm: 4, md: 2 }}>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 800, color: '#FFFFFF', lineHeight: 1, mb: 0.5 }}>
-                3
+                {selectedSenior.fallsCount}
               </Typography>
               <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 700, letterSpacing: '0.5px' }}>
                 FALLS THIS YEAR
@@ -314,7 +501,7 @@ export const Seniors: React.FC = () => {
           <Grid size={{ xs: 6, sm: 4, md: 2 }}>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 800, color: '#FFFFFF', lineHeight: 1, mb: 0.5 }}>
-                68%
+                {selectedSenior.medCompliance}%
               </Typography>
               <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 700, letterSpacing: '0.5px' }}>
                 MED COMPLIANCE
@@ -324,7 +511,7 @@ export const Seniors: React.FC = () => {
           <Grid size={{ xs: 6, sm: 4, md: 2 }}>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 800, color: '#FFFFFF', lineHeight: 1, mb: 0.5 }}>
-                2
+                {selectedSenior.devicesCount}
               </Typography>
               <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 700, letterSpacing: '0.5px' }}>
                 DEVICES ACTIVE
@@ -334,7 +521,7 @@ export const Seniors: React.FC = () => {
           <Grid size={{ xs: 6, sm: 4, md: 2 }}>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 800, color: '#10B981', lineHeight: 1, mb: 0.5 }}>
-                97%
+                {selectedSenior.latestSpo2}%
               </Typography>
               <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 700, letterSpacing: '0.5px' }}>
                 SPO₂ (LATEST)
@@ -344,7 +531,7 @@ export const Seniors: React.FC = () => {
           <Grid size={{ xs: 6, sm: 4, md: 2 }}>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 800, color: '#D97706', lineHeight: 1, mb: 0.5 }}>
-                148/94
+                {selectedSenior.latestBp}
               </Typography>
               <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 700, letterSpacing: '0.5px' }}>
                 BLOOD PRESSURE
@@ -354,7 +541,7 @@ export const Seniors: React.FC = () => {
           <Grid size={{ xs: 6, sm: 4, md: 2 }}>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 800, color: '#FFFFFF', lineHeight: 1, mb: 0.5 }}>
-                2
+                {selectedSenior.guardiansCount}
               </Typography>
               <Typography variant="caption" sx={{ color: '#94A3B8', fontWeight: 700, letterSpacing: '0.5px' }}>
                 GUARDIANS
@@ -405,19 +592,19 @@ export const Seniors: React.FC = () => {
                 <Typography variant="subtitle2" sx={{ color: '#8C7E76', fontWeight: 800, letterSpacing: '0.8px', mb: 2.5 }}>
                   PERSONAL INFORMATION
                 </Typography>
-                <Grid container spacing={2.5}>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>FULL NAME</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>Meena Devi</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>GENDER</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>Female</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>DATE OF BIRTH</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>March 14, 1944</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>AGE</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>82 years</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>NATIONALITY</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>Indian</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>BLOOD GROUP</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>O+</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>PRIMARY LANGUAGE</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>Tamil, Hindi</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>RELIGION</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>Hindu</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>RESIDENT ID</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>SR-001</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>ADMISSION DATE</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>February 12, 2024</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>ROOM</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>12-B · Wing C · 2nd Floor</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>MOBILITY AID</Typography><Typography variant="body2" sx={{ fontWeight: 700, color: '#D45529' }}>Walker (prescribed)</Typography></Box></Grid>
+                 <Grid container spacing={2.5}>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>FULL NAME</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.name}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>GENDER</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.gender}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>DATE OF BIRTH</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.dob}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>AGE</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.age} years</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>NATIONALITY</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.nationality || '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>BLOOD GROUP</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.bloodGroup}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>PRIMARY LANGUAGE</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.language || '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>RELIGION</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.religion || '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>RESIDENT ID</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.residentId}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>ADMISSION DATE</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.admissionDate}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>ROOM</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.room}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>MOBILITY AID</Typography><Typography variant="body2" sx={{ fontWeight: 700, color: '#D45529' }}>{selectedSenior.mobilityAid || '—'}</Typography></Box></Grid>
                 </Grid>
               </Card>
 
@@ -425,15 +612,15 @@ export const Seniors: React.FC = () => {
               <Card sx={{ p: 3, borderRadius: '8px', border: '1px solid #EAE5E0', boxShadow: 'none' }}>
                 <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 2.5 }}>
                   <Typography variant="subtitle2" sx={{ color: '#8C7E76', fontWeight: 800, letterSpacing: '0.8px' }}>LATEST VITALS</Typography>
-                  <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 500 }}>Recorded 07:30 AM today</Typography>
+                  <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 500 }}>Live readings</Typography>
                 </Box>
                 <Grid container spacing={2}>
-                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><FavoriteIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>82</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>HEART RATE</Typography><Typography variant="caption" sx={{ color: '#10B981', fontWeight: 600, fontSize: '0.68rem' }}>Normal range</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><SpeedIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>148/94</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>BLOOD PRESSURE</Typography><Typography variant="caption" sx={{ color: '#EF4444', fontWeight: 600, fontSize: '0.68rem' }}>Stage 2 - Elevated</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><OpacityIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>97%</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>OXYGEN SAT.</Typography><Typography variant="caption" sx={{ color: '#10B981', fontWeight: 600, fontSize: '0.68rem' }}>Normal range</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><ThermostatIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>36.8</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>TEMPERATURE</Typography><Typography variant="caption" sx={{ color: '#10B981', fontWeight: 600, fontSize: '0.68rem' }}>Normal</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><WaterDropIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>162</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>BLOOD GLUCOSE</Typography><Typography variant="caption" sx={{ color: '#F59E0B', fontWeight: 600, fontSize: '0.68rem' }}>Post-meal - High</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><AirIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>16</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>RESP. RATE</Typography><Typography variant="caption" sx={{ color: '#10B981', fontWeight: 600, fontSize: '0.68rem' }}>Normal</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><FavoriteIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{selectedSenior.latestHeartRate || '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>HEART RATE</Typography><Typography variant="caption" sx={{ color: selectedSenior.latestHeartRate ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{selectedSenior.latestHeartRate ? 'Normal range' : '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><SpeedIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{selectedSenior.latestBp || '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>BLOOD PRESSURE</Typography><Typography variant="caption" sx={{ color: selectedSenior.latestBp !== '—' ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{selectedSenior.latestBp !== '—' ? 'Normal' : '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><OpacityIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{selectedSenior.latestSpo2 ? `${selectedSenior.latestSpo2}%` : '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>OXYGEN SAT.</Typography><Typography variant="caption" sx={{ color: selectedSenior.latestSpo2 ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{selectedSenior.latestSpo2 ? 'Normal range' : '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><ThermostatIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{selectedSenior.latestTemperature ? `${selectedSenior.latestTemperature}°C` : '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>TEMPERATURE</Typography><Typography variant="caption" sx={{ color: selectedSenior.latestTemperature ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{selectedSenior.latestTemperature ? 'Normal' : '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><WaterDropIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{selectedSenior.latestBloodGlucose || '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>BLOOD GLUCOSE</Typography><Typography variant="caption" sx={{ color: selectedSenior.latestBloodGlucose ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{selectedSenior.latestBloodGlucose ? 'Normal' : '—'}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><Box sx={{ p: 2, border: '1px solid #EAE5E0', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 0.5 }}><AirIcon sx={{ color: '#D45529', fontSize: 24, mb: 0.5 }} /><Typography variant="h6" sx={{ fontWeight: 800, color: '#1A0E07', lineHeight: 1.1 }}>{selectedSenior.latestRespRate || '—'}</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.62rem' }}>RESP. RATE</Typography><Typography variant="caption" sx={{ color: selectedSenior.latestRespRate ? '#10B981' : '#8C7E76', fontWeight: 600, fontSize: '0.68rem' }}>{selectedSenior.latestRespRate ? 'Normal' : '—'}</Typography></Box></Grid>
                 </Grid>
               </Card>
 
@@ -441,12 +628,12 @@ export const Seniors: React.FC = () => {
               <Card sx={{ p: 3, borderRadius: '8px', border: '1px solid #EAE5E0', boxShadow: 'none' }}>
                 <Typography variant="subtitle2" sx={{ color: '#8C7E76', fontWeight: 800, letterSpacing: '0.8px', mb: 2.5 }}>CARE TEAM</Typography>
                 <Grid container spacing={2.5}>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>PRIMARY PHYSICIAN</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>Dr. Suresh Babu - Geriatrics</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>PHYSICIAN CONTACT</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>+91 98451 00001</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>ASSIGNED CAREGIVER</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>Priya K. - Wing C</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>FLOOR ATTENDANT</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>Rajan J. - Wing C</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>DIETITIAN</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>Mrs. Annapurna S.</Typography></Box></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>PHYSIOTHERAPIST</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>Mr. Kiran Raj - Mon / Thu</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>PRIMARY PHYSICIAN</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.primaryPhysician}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>PHYSICIAN CONTACT</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.physicianPhone}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>ASSIGNED CAREGIVER</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.caregiver}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>FLOOR ATTENDANT</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.floorAttendant}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>DIETITIAN</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.dietitian}</Typography></Box></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}><Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>PHYSIOTHERAPIST</Typography><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07' }}>{selectedSenior.physiotherapist}</Typography></Box></Grid>
                 </Grid>
               </Card>
             </Grid>
@@ -456,295 +643,113 @@ export const Seniors: React.FC = () => {
               <Card sx={{ p: 2.5, borderRadius: '8px', border: '1px solid #EAE5E0', boxShadow: 'none' }}>
                 <Typography variant="subtitle2" sx={{ color: '#8C7E76', fontWeight: 800, letterSpacing: '0.8px', mb: 2 }}>RISK SUMMARY</Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Fall Risk</Typography><Typography variant="caption" sx={{ color: '#EF4444', fontWeight: 700 }}>HIGH</Typography></Box><Divider sx={{ borderColor: '#F5F2EF' }} />
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Wander Risk</Typography><Typography variant="caption" sx={{ color: '#F59E0B', fontWeight: 700 }}>MEDIUM</Typography></Box><Divider sx={{ borderColor: '#F5F2EF' }} />
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Medication Compliance</Typography><Typography variant="caption" sx={{ color: '#F59E0B', fontWeight: 700 }}>MEDIUM</Typography></Box><Divider sx={{ borderColor: '#F5F2EF' }} />
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Diabetes Management</Typography><Typography variant="caption" sx={{ color: '#F59E0B', fontWeight: 700 }}>MEDIUM</Typography></Box><Divider sx={{ borderColor: '#F5F2EF' }} />
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Cardiac Risk</Typography><Typography variant="caption" sx={{ color: '#F59E0B', fontWeight: 700 }}>MEDIUM</Typography></Box><Divider sx={{ borderColor: '#F5F2EF' }} />
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Pressure Sore Risk</Typography><Typography variant="caption" sx={{ color: '#10B981', fontWeight: 700 }}>LOW</Typography></Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Fall Risk</Typography><Typography variant="caption" sx={{ color: selectedSenior.fallRisk === 'HIGH' ? '#EF4444' : selectedSenior.fallRisk === 'MEDIUM' ? '#F59E0B' : selectedSenior.fallRisk === 'LOW' ? '#10B981' : '#8C7E76', fontWeight: 700 }}>{selectedSenior.fallRisk}</Typography></Box><Divider sx={{ borderColor: '#F5F2EF' }} />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Wander Risk</Typography><Typography variant="caption" sx={{ color: selectedSenior.wanderRisk === 'HIGH' ? '#EF4444' : selectedSenior.wanderRisk === 'MEDIUM' ? '#F59E0B' : selectedSenior.wanderRisk === 'LOW' ? '#10B981' : '#8C7E76', fontWeight: 700 }}>{selectedSenior.wanderRisk}</Typography></Box><Divider sx={{ borderColor: '#F5F2EF' }} />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Cardiac Risk</Typography><Typography variant="caption" sx={{ color: selectedSenior.cardiacRisk === 'HIGH' ? '#EF4444' : selectedSenior.cardiacRisk === 'MEDIUM' ? '#F59E0B' : selectedSenior.cardiacRisk === 'LOW' ? '#10B981' : '#8C7E76', fontWeight: 700 }}>{selectedSenior.cardiacRisk}</Typography></Box>
                 </Box>
               </Card>
 
               <Card sx={{ p: 2.5, borderRadius: '8px', border: '1px solid #EAE5E0', boxShadow: 'none' }}>
                 <Typography variant="subtitle2" sx={{ color: '#8C7E76', fontWeight: 800, letterSpacing: '0.8px', mb: 2 }}>EMERGENCY CONTACTS</Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Avatar sx={{ bgcolor: '#FEF3C7', color: '#D97706', width: 28, height: 28, fontSize: '0.75rem', fontWeight: 750 }}>KM</Avatar><Box><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07', fontSize: '0.8rem' }}>Kavitha Meena</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.68rem', display: 'block' }}>Daughter - Primary</Typography></Box></Box><Box sx={{ display: 'flex', gap: 0.5 }}><IconButton size="small" sx={{ border: '1px solid #EAE5E0', color: '#4F46E5', borderRadius: '4px', p: 0.5 }}><PhoneIcon sx={{ fontSize: 13 }} /></IconButton><IconButton size="small" sx={{ border: '1px solid #EAE5E0', color: '#4F46E5', borderRadius: '4px', p: 0.5 }}><ChatIcon sx={{ fontSize: 13 }} /></IconButton></Box></Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Avatar sx={{ bgcolor: '#DBEAFE', color: '#2563EB', width: 28, height: 28, fontSize: '0.75rem', fontWeight: 750 }}>SM</Avatar><Box><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07', fontSize: '0.8rem' }}>Suresh Meena</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.68rem', display: 'block' }}>Son - Secondary</Typography></Box></Box><Box sx={{ display: 'flex', gap: 0.5 }}><IconButton size="small" sx={{ border: '1px solid #EAE5E0', color: '#4F46E5', borderRadius: '4px', p: 0.5 }}><PhoneIcon sx={{ fontSize: 13 }} /></IconButton><IconButton size="small" sx={{ border: '1px solid #EAE5E0', color: '#4F46E5', borderRadius: '4px', p: 0.5 }}><ChatIcon sx={{ fontSize: 13 }} /></IconButton></Box></Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Avatar sx={{ bgcolor: '#D1FAE5', color: '#059669', width: 28, height: 28, fontSize: '0.75rem', fontWeight: 750 }}>SB</Avatar><Box><Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07', fontSize: '0.8rem' }}>Dr. Suresh Babu</Typography><Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.68rem', display: 'block' }}>Primary Physician</Typography></Box></Box><Box sx={{ display: 'flex', gap: 0.5 }}><IconButton size="small" sx={{ border: '1px solid #EAE5E0', color: '#4F46E5', borderRadius: '4px', p: 0.5 }}><PhoneIcon sx={{ fontSize: 13 }} /></IconButton><IconButton size="small" sx={{ border: '1px solid #EAE5E0', color: '#4F46E5', borderRadius: '4px', p: 0.5 }}><ChatIcon sx={{ fontSize: 13 }} /></IconButton></Box></Box>
+                  {seniorGuardians.length > 0 ? (
+                    seniorGuardians.map((g, index) => {
+                      const initials = g.name ? g.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'G';
+                      const isPrimary = index === 0 || String(g.relationship).toLowerCase().includes('primary');
+                      const avatarBg = isPrimary ? '#FEF3C7' : '#DBEAFE';
+                      const avatarColor = isPrimary ? '#D97706' : '#2563EB';
+                      return (
+                        <Box key={g.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Avatar sx={{ bgcolor: avatarBg, color: avatarColor, width: 28, height: 28, fontSize: '0.75rem', fontWeight: 750 }}>{initials}</Avatar>
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07', fontSize: '0.8rem' }}>{g.name}</Typography>
+                              <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.68rem', display: 'block' }}>{g.relationship} · {g.phone}</Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+                      );
+                    })
+                  ) : (
+                    <Typography variant="body2" sx={{ color: '#8C7E76', fontSize: '0.8rem' }}>No emergency contacts listed</Typography>
+                  )}
                 </Box>
               </Card>
 
               <Card sx={{ p: 2.5, borderRadius: '8px', border: '1px solid #EAE5E0', boxShadow: 'none' }}>
                 <Typography variant="subtitle2" sx={{ color: '#8C7E76', fontWeight: 800, letterSpacing: '0.8px', mb: 2 }}>ACTIVE CONDITIONS</Typography>
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  <Chip label="Osteoporosis" size="small" sx={{ bgcolor: '#EFF6FF', color: '#2563EB', fontWeight: 600, fontSize: '0.73rem', borderRadius: '4px' }} />
-                  <Chip label="Type 2 Diabetes" size="small" sx={{ bgcolor: '#EFF6FF', color: '#2563EB', fontWeight: 600, fontSize: '0.73rem', borderRadius: '4px' }} />
-                  <Chip label="Hypertension" size="small" sx={{ bgcolor: '#FEE2E2', color: '#DC2626', fontWeight: 600, fontSize: '0.73rem', borderRadius: '4px' }} />
-                  <Chip label="Mild Dementia" size="small" sx={{ bgcolor: '#F3F4F6', color: '#4B5563', fontWeight: 600, fontSize: '0.73rem', borderRadius: '4px' }} />
+                  {selectedSenior.activeConditions && selectedSenior.activeConditions.length > 0 ? (
+                    selectedSenior.activeConditions.map((cond: string) => (
+                      <Chip key={cond} label={cond} size="small" sx={{ bgcolor: '#EFF6FF', color: '#2563EB', fontWeight: 600, fontSize: '0.73rem', borderRadius: '4px' }} />
+                    ))
+                  ) : (
+                    <Typography variant="body2" sx={{ color: '#8C7E76', fontSize: '0.8rem' }}>None</Typography>
+                  )}
                 </Box>
               </Card>
             </Grid>
           </Grid>
         )}
 
-        {/* SUBTAB 1: Medical Details Tab View */}
+        {/* SUBTAB 1: Medical Details Tab View — all data comes from the backend */}
         {activeSubTab === 1 && (
           <Grid container spacing={3.5}>
-            {/* Left Medical Form column */}
+            {/* Left Medical column */}
             <Grid size={{ xs: 12, md: 8.5 }} sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
-              
+
               {/* Card 1: Diagnosed Conditions */}
               <Card sx={{ p: 3, borderRadius: '8px', border: '1px solid #EAE5E0', boxShadow: 'none' }}>
                 <Typography variant="subtitle2" sx={{ color: '#8C7E76', fontWeight: 800, letterSpacing: '0.8px', mb: 2.5 }}>
                   DIAGNOSED CONDITIONS
                 </Typography>
-
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                  {/* Condition 1 */}
-                  <Box sx={{ py: 2 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <WarningIcon sx={{ color: '#EF4444', fontSize: 16 }} /> Osteoporosis
-                      </Typography>
-                      <Chip label="High Risk" size="small" sx={{ bgcolor: '#FEE2E2', color: '#DC2626', fontWeight: 800, fontSize: '0.65rem', borderRadius: '4px' }} />
-                    </Box>
-                    <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', lineHeight: 1.5 }}>
-                      <strong>Severe</strong> — diagnosed June 2021. High fracture risk. 3 falls this year, 1 resulting in hairline wrist fracture (Jan 2026). Physiotherapy twice weekly.
-                    </Typography>
+                {selectedSenior.activeConditions && selectedSenior.activeConditions.length > 0 ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    {selectedSenior.activeConditions.map((cond: string, idx: number) => (
+                      <React.Fragment key={cond}>
+                        {idx > 0 && <Divider sx={{ borderColor: '#F5F2EF' }} />}
+                        <Box sx={{ py: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <InfoIcon sx={{ color: '#3B82F6', fontSize: 16 }} />
+                          <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07' }}>{cond}</Typography>
+                        </Box>
+                      </React.Fragment>
+                    ))}
                   </Box>
-
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  {/* Condition 2 */}
-                  <Box sx={{ py: 2 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <WarningAmberIcon sx={{ color: '#D97706', fontSize: 16 }} /> Type 2 Diabetes Mellitus
-                      </Typography>
-                      <Chip label="Monitor" size="small" sx={{ bgcolor: '#FFFBEB', color: '#D97706', fontWeight: 800, fontSize: '0.65rem', borderRadius: '4px' }} />
-                    </Box>
-                    <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', lineHeight: 1.5 }}>
-                      Diagnosed 2014. HbA1c: 8.1% (March 2026). Managed with Metformin 500mg BD. Compliance issues noted this week — 4 missed doses. Blood glucose monitoring twice daily.
-                    </Typography>
-                  </Box>
-
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  {/* Condition 3 */}
-                  <Box sx={{ py: 2 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <WarningAmberIcon sx={{ color: '#D97706', fontSize: 16 }} /> Hypertension — Stage 2
-                      </Typography>
-                      <Chip label="Elevated" size="small" sx={{ bgcolor: '#FFFBEB', color: '#D97706', fontWeight: 800, fontSize: '0.65rem', borderRadius: '4px' }} />
-                    </Box>
-                    <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', lineHeight: 1.5 }}>
-                      BP consistently elevated — 148/94 today. On Amlodipine 5mg OD. Target BP: 130/80. Review with cardiologist due in June 2026.
-                    </Typography>
-                  </Box>
-
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  {/* Condition 4 */}
-                  <Box sx={{ py: 2 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <InfoIcon sx={{ color: '#3B82F6', fontSize: 16 }} /> Mild Cognitive Impairment (Early Dementia)
-                      </Typography>
-                      <Chip label="Stable" size="small" sx={{ bgcolor: '#EFF6FF', color: '#2563EB', fontWeight: 800, fontSize: '0.65rem', borderRadius: '4px' }} />
-                    </Box>
-                    <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', lineHeight: 1.5 }}>
-                      Diagnosed March 2025. MMSE score: 22/30. Oriented to person, partially to place. Memory prompts required for medications. Night-time confusion episodes 1-2× per week.
-                    </Typography>
-                  </Box>
-
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  {/* Condition 5 */}
-                  <Box sx={{ py: 2 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <InfoIcon sx={{ color: '#3B82F6', fontSize: 16 }} /> Arthritis — Bilateral Knees
-                      </Typography>
-                      <Chip label="Stable" size="small" sx={{ bgcolor: '#EFF6FF', color: '#2563EB', fontWeight: 800, fontSize: '0.65rem', borderRadius: '4px' }} />
-                    </Box>
-                    <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', lineHeight: 1.5 }}>
-                      Degenerative arthritis. Mobility reduced. Managed with physiotherapy and Aspirin 75mg. No surgical intervention planned.
-                    </Typography>
-                  </Box>
-                </Box>
+                ) : (
+                  <Typography variant="body2" sx={{ color: '#8C7E76', fontSize: '0.8rem' }}>
+                    No diagnosed conditions on record for this senior.
+                  </Typography>
+                )}
               </Card>
 
-              {/* Card 2: Current Medications & Compliance */}
+              {/* Card 2: Medications — shown when the backend provides medication data */}
               <Card sx={{ p: 3, borderRadius: '8px', border: '1px solid #EAE5E0', boxShadow: 'none' }}>
                 <Typography variant="subtitle2" sx={{ color: '#8C7E76', fontWeight: 800, letterSpacing: '0.8px', mb: 2.5 }}>
-                  CURRENT MEDICATIONS & COMPLIANCE
+                  CURRENT MEDICATIONS &amp; COMPLIANCE
                 </Typography>
-
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
-                  {/* Med 1 */}
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.25 }}>
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07' }}>
-                          💊 Metformin 500mg
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.75rem', mt: 0.25, display: 'block' }}>
-                          For: Type 2 Diabetes · Prescribed by Dr. Suresh Babu · Twice daily — Morning 8:00 AM, Evening 7:00 PM
-                        </Typography>
-                      </Box>
-                      <Box sx={{ textAlign: 'right' }}>
-                        <Chip label="MISSED (AM)" size="small" sx={{ bgcolor: '#FEE2E2', color: '#DC2626', fontWeight: 800, fontSize: '0.65rem', borderRadius: '4px', mb: 0.5 }} />
-                        <Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.68rem' }}>Refill: 18 days left</Typography>
-                      </Box>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Box sx={{ flexGrow: 1, height: 6, bgcolor: '#EAE5E0', borderRadius: '3px', overflow: 'hidden' }}>
-                        <Box sx={{ width: '58%', height: '100%', bgcolor: '#F97316' }} />
-                      </Box>
-                      <Typography sx={{ color: '#F97316', fontWeight: 700, fontSize: '0.75rem', whiteSpace: 'nowrap' }}>58% this week · 4 missed doses</Typography>
-                    </Box>
-                  </Box>
-
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  {/* Med 2 */}
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.25 }}>
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07' }}>
-                          💊 Amlodipine 5mg
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.75rem', mt: 0.25, display: 'block' }}>
-                          For: Hypertension · Prescribed by Dr. Suresh Babu · Once daily — Morning 9:00 AM with food
-                        </Typography>
-                      </Box>
-                      <Box sx={{ textAlign: 'right' }}>
-                        <Chip label="TAKEN (9:05 AM)" size="small" sx={{ bgcolor: '#D1FAE5', color: '#059669', fontWeight: 800, fontSize: '0.65rem', borderRadius: '4px', mb: 0.5 }} />
-                        <Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.68rem' }}>Refill: 24 days left</Typography>
-                      </Box>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Box sx={{ flexGrow: 1, height: 6, bgcolor: '#EAE5E0', borderRadius: '3px', overflow: 'hidden' }}>
-                        <Box sx={{ width: '80%', height: '100%', bgcolor: '#10B981' }} />
-                      </Box>
-                      <Typography sx={{ color: '#10B981', fontWeight: 700, fontSize: '0.75rem', whiteSpace: 'nowrap' }}>80% this week</Typography>
-                    </Box>
-                  </Box>
-
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  {/* Med 3 */}
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.25 }}>
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07' }}>
-                          💊 Aspirin 75mg
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.75rem', mt: 0.25, display: 'block' }}>
-                          For: Arthritis / Cardiac prophylaxis · Dr. Suresh Babu · Once daily — Night 9:00 PM after dinner
-                        </Typography>
-                      </Box>
-                      <Box sx={{ textAlign: 'right' }}>
-                        <Chip label="DUE TONIGHT" size="small" sx={{ bgcolor: '#FFFBEB', color: '#D97706', fontWeight: 800, fontSize: '0.65rem', borderRadius: '4px', mb: 0.5 }} />
-                        <Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.68rem' }}>Refill: 30 days left</Typography>
-                      </Box>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Box sx={{ flexGrow: 1, height: 6, bgcolor: '#EAE5E0', borderRadius: '3px', overflow: 'hidden' }}>
-                        <Box sx={{ width: '71%', height: '100%', bgcolor: '#F97316' }} />
-                      </Box>
-                      <Typography sx={{ color: '#F97316', fontWeight: 700, fontSize: '0.75rem', whiteSpace: 'nowrap' }}>71% this week</Typography>
-                    </Box>
-                  </Box>
-
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  {/* Med 4 */}
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.25 }}>
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07' }}>
-                          💊 Calcium Carbonate 500mg + Vit D3
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.75rem', mt: 0.25, display: 'block' }}>
-                          For: Osteoporosis · Dr. Suresh Babu · Once daily — Afternoon 1:00 PM with lunch
-                        </Typography>
-                      </Box>
-                      <Box sx={{ textAlign: 'right' }}>
-                        <Chip label="TAKEN (1:12 PM)" size="small" sx={{ bgcolor: '#D1FAE5', color: '#059669', fontWeight: 800, fontSize: '0.65rem', borderRadius: '4px', mb: 0.5 }} />
-                        <Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.68rem' }}>Refill: 12 days left</Typography>
-                      </Box>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Box sx={{ flexGrow: 1, height: 6, bgcolor: '#EAE5E0', borderRadius: '3px', overflow: 'hidden' }}>
-                        <Box sx={{ width: '90%', height: '100%', bgcolor: '#10B981' }} />
-                      </Box>
-                      <Typography sx={{ color: '#10B981', fontWeight: 700, fontSize: '0.75rem', whiteSpace: 'nowrap' }}>90% this week — Excellent</Typography>
-                    </Box>
-                  </Box>
-
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  {/* Med 5 */}
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.25 }}>
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07' }}>
-                          💊 Donepezil 5mg
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.75rem', mt: 0.25, display: 'block' }}>
-                          For: Mild Cognitive Impairment · Dr. Kavita Nair (Neurologist) · Once daily — Bedtime 10:00 PM
-                        </Typography>
-                      </Box>
-                      <Box sx={{ textAlign: 'right' }}>
-                        <Chip label="DUE TONIGHT" size="small" sx={{ bgcolor: '#FFFBEB', color: '#D97706', fontWeight: 800, fontSize: '0.65rem', borderRadius: '4px', mb: 0.5 }} />
-                        <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: 0.5 }}><WarningIcon sx={{ fontSize: 11, color: '#F97316' }} /> Refill: 5 days left</Typography>
-                      </Box>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Box sx={{ flexGrow: 1, height: 6, bgcolor: '#EAE5E0', borderRadius: '3px', overflow: 'hidden' }}>
-                        <Box sx={{ width: '85%', height: '100%', bgcolor: '#10B981' }} />
-                      </Box>
-                      <Typography sx={{ color: '#10B981', fontWeight: 700, fontSize: '0.75rem', whiteSpace: 'nowrap' }}>85% this week</Typography>
-                    </Box>
-                  </Box>
-                </Box>
+                <Typography variant="body2" sx={{ color: '#8C7E76', fontSize: '0.8rem' }}>
+                  No medication records available for this senior yet.
+                </Typography>
               </Card>
 
               {/* Card 3: Allergies */}
               <Card sx={{ p: 3, borderRadius: '8px', border: '1px solid #EAE5E0', boxShadow: 'none' }}>
                 <Typography variant="subtitle2" sx={{ color: '#8C7E76', fontWeight: 800, letterSpacing: '0.8px', mb: 2.5 }}>
-                  ALLERGIES & CONTRAINDICATIONS
+                  ALLERGIES &amp; CONTRAINDICATIONS
                 </Typography>
-
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                {selectedSenior.allergies ? (
                   <Box sx={{ p: 1.75, bgcolor: '#FFF1F2', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: 2, borderLeft: '4px solid #EF4444' }}>
                     <ErrorIcon sx={{ color: '#EF4444', fontSize: 18 }} />
-                    <Box>
-                      <Typography variant="body2" sx={{ color: '#991B1B', fontWeight: 750, fontSize: '0.825rem' }}>Penicillin</Typography>
-                      <Typography variant="caption" sx={{ color: '#991B1B', opacity: 0.9, fontSize: '0.75rem', display: 'block', mt: 0.25 }}>Severe — Anaphylaxis. Documented 1998. No penicillin or beta-lactam antibiotics.</Typography>
-                    </Box>
+                    <Typography variant="body2" sx={{ color: '#991B1B', fontWeight: 750, fontSize: '0.825rem' }}>
+                      {selectedSenior.allergies}
+                    </Typography>
                   </Box>
-
-                  <Box sx={{ p: 1.75, bgcolor: '#FFF1F2', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: 2, borderLeft: '4px solid #EF4444' }}>
-                    <ErrorIcon sx={{ color: '#EF4444', fontSize: 18 }} />
-                    <Box>
-                      <Typography variant="body2" sx={{ color: '#991B1B', fontWeight: 750, fontSize: '0.825rem' }}>Sulfonamides</Typography>
-                      <Typography variant="caption" sx={{ color: '#991B1B', opacity: 0.9, fontSize: '0.75rem', display: 'block', mt: 0.25 }}>Moderate — Rash and hypersensitivity. Noted 2006.</Typography>
-                    </Box>
-                  </Box>
-
-                  <Box sx={{ p: 1.75, bgcolor: '#FFFBEB', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: 2, borderLeft: '4px solid #F59E0B' }}>
-                    <WarningIcon sx={{ color: '#F59E0B', fontSize: 18 }} />
-                    <Box>
-                      <Typography variant="body2" sx={{ color: '#92400E', fontWeight: 750, fontSize: '0.825rem' }}>NSAIDs (Caution)</Typography>
-                      <Typography variant="caption" sx={{ color: '#92400E', opacity: 0.9, fontSize: '0.75rem', display: 'block', mt: 0.25 }}>GI sensitivity. Use with caution and always with food. Avoid high doses.</Typography>
-                    </Box>
-                  </Box>
-                </Box>
+                ) : (
+                  <Typography variant="body2" sx={{ color: '#8C7E76', fontSize: '0.8rem' }}>
+                    No known allergies on record.
+                  </Typography>
+                )}
               </Card>
-
             </Grid>
 
             {/* Right Medical Sidebar Column */}
@@ -754,82 +759,41 @@ export const Seniors: React.FC = () => {
                 <Typography variant="subtitle2" sx={{ color: '#8C7E76', fontWeight: 800, letterSpacing: '0.8px', mb: 2 }}>
                   PHYSICIAN INFO
                 </Typography>
-
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25 }}>
                   <Box>
-                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.62rem', letterSpacing: '0.5px' }}>PRIMARY</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 750, color: '#1A0E07', mt: 0.25 }}>Dr. Suresh Babu</Typography>
-                    <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.73rem' }}>Geriatrics · MBBS MD</Typography>
+                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.62rem', letterSpacing: '0.5px' }}>PRIMARY PHYSICIAN</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 750, color: '#1A0E07', mt: 0.25 }}>{selectedSenior.primaryPhysician || '—'}</Typography>
                   </Box>
-
                   <Divider sx={{ borderColor: '#F5F2EF' }} />
-
                   <Box>
-                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.62rem', letterSpacing: '0.5px' }}>NEUROLOGIST</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 750, color: '#1A0E07', mt: 0.25 }}>Dr. Kavita Nair</Typography>
-                  </Box>
-
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  <Box>
-                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.62rem', letterSpacing: '0.5px' }}>NEXT REVIEW</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#D45529', mt: 0.25 }}>June 5, 2026 - Cardiology</Typography>
-                  </Box>
-
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  <Box>
-                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.62rem', letterSpacing: '0.5px' }}>LAST VISIT</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07', mt: 0.25 }}>May 20, 2026</Typography>
+                    <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.62rem', letterSpacing: '0.5px' }}>CONTACT</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 650, color: '#1A0E07', mt: 0.25 }}>{selectedSenior.physicianPhone || '—'}</Typography>
                   </Box>
                 </Box>
               </Card>
 
-              {/* Lab Results Card */}
+              {/* Health Reports Card — uploaded compliance reports from the backend */}
               <Card sx={{ p: 2.5, borderRadius: '8px', border: '1px solid #EAE5E0', boxShadow: 'none' }}>
                 <Typography variant="subtitle2" sx={{ color: '#8C7E76', fontWeight: 800, letterSpacing: '0.8px', mb: 2 }}>
-                  LAB RESULTS (LATEST)
+                  HEALTH REPORTS
                 </Typography>
-
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>HbA1c</Typography>
-                    <Typography variant="body2" sx={{ color: '#DC2626', fontWeight: 750, fontSize: '0.825rem' }}>8.1% - High</Typography>
+                {seniorReports.length > 0 ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {seniorReports.map((report, idx) => (
+                      <React.Fragment key={report.id}>
+                        {idx > 0 && <Divider sx={{ borderColor: '#F5F2EF' }} />}
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>{report.name}</Typography>
+                          <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700 }}>{report.type}</Typography>
+                        </Box>
+                      </React.Fragment>
+                    ))}
                   </Box>
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Fasting Glucose</Typography>
-                    <Typography variant="body2" sx={{ color: '#DC2626', fontWeight: 750, fontSize: '0.825rem' }}>136 mg/dL</Typography>
-                  </Box>
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Total Cholesterol</Typography>
-                    <Typography variant="body2" sx={{ color: '#059669', fontWeight: 750, fontSize: '0.825rem' }}>174 mg/dL · OK</Typography>
-                  </Box>
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Serum Creatinine</Typography>
-                    <Typography variant="body2" sx={{ color: '#059669', fontWeight: 750, fontSize: '0.825rem' }}>0.9 mg/dL · OK</Typography>
-                  </Box>
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Vitamin D3</Typography>
-                    <Typography variant="body2" sx={{ color: '#DC2626', fontWeight: 750, fontSize: '0.825rem' }}>14 ng/mL - Low</Typography>
-                  </Box>
-                  <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>MMSE Score</Typography>
-                    <Typography variant="body2" sx={{ color: '#1A0E07', fontWeight: 750, fontSize: '0.825rem' }}>22 / 30</Typography>
-                  </Box>
-                  <Typography variant="caption" sx={{ color: '#8C7E76', mt: 0.5, display: 'block', textAlign: 'right', fontSize: '0.68rem' }}>
-                    Last labs: March 18, 2026
+                ) : (
+                  <Typography variant="body2" sx={{ color: '#8C7E76', fontSize: '0.8rem' }}>
+                    No reports uploaded for this senior.
                   </Typography>
-                </Box>
+                )}
               </Card>
             </Grid>
           </Grid>
@@ -841,195 +805,105 @@ export const Seniors: React.FC = () => {
             {/* Devices Section Header */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="body2" sx={{ color: '#8C7E76', fontWeight: 600 }}>
-                2 devices assigned to Meena Devi - SR-001
+                {seniorDevices.length} devices assigned to {selectedSenior.name} - {selectedSenior.residentId}
               </Typography>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<AddIcon sx={{ fontSize: 13 }} />}
-                sx={{
-                  color: '#D45529',
-                  borderColor: '#D45529',
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  fontSize: '0.78rem',
-                  py: 0.5,
-                  px: 1.5,
-                  '&:hover': {
-                    borderColor: '#B23F1C',
-                    bgcolor: '#FFF2EC',
-                  }
-                }}
-              >
-                Assign Device
-              </Button>
             </Box>
 
             {/* Devices Grid list */}
+            {seniorDevices.length === 0 && (
+              <Card sx={{ p: 4, textAlign: 'center', border: '1px solid #EAE5E0', borderRadius: '8px', boxShadow: 'none' }}>
+                <Typography variant="body2" sx={{ color: '#8C7E76' }}>
+                  No devices assigned to this senior. Devices can be assigned from the Devices page.
+                </Typography>
+              </Card>
+            )}
             <Grid container spacing={3.5}>
-              {/* Device 1: EV-07B Wearable */}
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Card sx={{ border: '1px solid #EAE5E0', boxShadow: 'none', borderRadius: '8px', overflow: 'hidden' }}>
-                  {/* Card title banner */}
-                  <Box sx={{ bgcolor: '#1E293B', p: 2, color: '#FFFFFF', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <DeviceHubIcon sx={{ color: '#3B82F6' }} />
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>EV-07B Wearable</Typography>
-                        <Typography variant="caption" sx={{ color: '#94A3B8', fontSize: '0.7rem' }}>Device ID: #4421 · IMEI: 867291049012345</Typography>
-                      </Box>
-                    </Box>
-                    <Box sx={{ textAlign: 'right' }}>
-                      <Typography sx={{ color: '#10B981', fontWeight: 700, fontSize: '0.725rem', display: 'flex', alignItems: 'center', gap: 0.5 }}><Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#10B981' }} /> Online</Typography>
-                      <Typography variant="caption" sx={{ color: '#94A3B8', fontSize: '0.625rem' }}>Last sync: 2 min ago</Typography>
-                    </Box>
-                  </Box>
-
-                  {/* Device stats */}
-                  <Box sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 2.25 }}>
-                    <Grid container spacing={2} sx={{ textAlign: 'center' }}>
-                      <Grid size={{ xs: 4 }}>
-                        <Typography variant="h5" sx={{ fontWeight: 800, color: '#1A0E07' }}>74%</Typography>
-                        <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>BATTERY</Typography>
-                      </Grid>
-                      <Grid size={{ xs: 4 }}>
-                        <Typography variant="h5" sx={{ fontWeight: 800, color: '#1A0E07' }}>12</Typography>
-                        <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>ALERTS SENT</Typography>
-                      </Grid>
-                      <Grid size={{ xs: 4 }}>
-                        <Typography variant="h5" sx={{ fontWeight: 800, color: '#1A0E07', fontSize: '1.15rem', mt: 0.35 }}>Mar '24</Typography>
-                        <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>ASSIGNED</Typography>
-                      </Grid>
-                    </Grid>
-
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: -0.5 }}>
-                      <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.68rem', fontWeight: 600 }}>Battery</Typography>
-                      <Box sx={{ flexGrow: 1, height: 6, bgcolor: '#EAE5E0', borderRadius: '3px', overflow: 'hidden' }}>
-                        <Box sx={{ width: '74%', height: '100%', bgcolor: '#10B981' }} />
-                      </Box>
-                      <Typography sx={{ color: '#10B981', fontWeight: 700, fontSize: '0.725rem' }}>74%</Typography>
-                    </Box>
-
-                    {/* Metadata details list */}
-                    <Grid container spacing={1.5} sx={{ border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', p: 1.75, borderRadius: '8px' }}>
-                      <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>FIRMWARE</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#1A0E07' }}>v3.2.1</Typography></Grid>
-                      <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>NETWORK</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#1A0E07' }}>4G LTE - SIM OK</Typography></Grid>
-                      <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>FALL SENSOR</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#059669' }}>Active</Typography></Grid>
-                      <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>GPS</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#059669' }}>Lock acquired</Typography></Grid>
-                      <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>HEART RATE</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#059669' }}>Monitoring</Typography></Grid>
-                      <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>SPO₂</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#059669' }}>Monitoring</Typography></Grid>
-                    </Grid>
-
-                    {/* Alerts Log from device */}
-                    <Box>
-                      <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.62rem', letterSpacing: '0.5px', display: 'block', mb: 1 }}>
-                        RECENT ALERTS FROM THIS DEVICE
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                          <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#EF4444' }} />
-                          <Typography variant="caption" sx={{ color: '#8C7E76', width: 60 }}>09:14 AM</Typography>
-                          <Typography variant="body2" sx={{ color: '#1A0E07', fontSize: '0.78rem', fontWeight: 600 }}>Fall detected — accelerometer 4.2G - <Box component="span" sx={{ color: '#EF4444' }}>Active</Box></Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                          <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#94A3B8' }} />
-                          <Typography variant="caption" sx={{ color: '#8C7E76', width: 60 }}>May 14</Typography>
-                          <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.78rem' }}>Fall detected — resolved (false alarm after call)</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                          <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#94A3B8' }} />
-                          <Typography variant="caption" sx={{ color: '#8C7E76', width: 60 }}>Apr 2</Typography>
-                          <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.78rem' }}>Fall detected — confirmed, attended, resolved</Typography>
+              {seniorDevices.map((device) => (
+                <Grid size={{ xs: 12, md: 6 }} key={device.id}>
+                  <Card sx={{ border: '1px solid #EAE5E0', boxShadow: 'none', borderRadius: '8px', overflow: 'hidden' }}>
+                    {/* Card title banner */}
+                    <Box sx={{ bgcolor: '#1E293B', p: 2, color: '#FFFFFF', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <DeviceHubIcon sx={{ color: '#3B82F6' }} />
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{device.name}</Typography>
+                          <Typography variant="caption" sx={{ color: '#94A3B8', fontSize: '0.7rem' }}>Device ID: {device.deviceId} · IMEI: {device.imei}</Typography>
                         </Box>
                       </Box>
-                    </Box>
-                  </Box>
-                </Card>
-              </Grid>
-
-              {/* Device 2: Guard Rail - Bed Sensor */}
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Card sx={{ border: '1px solid #EAE5E0', boxShadow: 'none', borderRadius: '8px', overflow: 'hidden' }}>
-                  {/* Card title banner */}
-                  <Box sx={{ bgcolor: '#1E293B', p: 2, color: '#FFFFFF', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <SecurityIcon sx={{ color: '#EF4444' }} />
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Guard Rail — Bed Sensor</Typography>
-                        <Typography variant="caption" sx={{ color: '#94A3B8', fontSize: '0.7rem' }}>Device ID: #0091 · Installed: Room 12-B</Typography>
+                      <Box sx={{ textAlign: 'right' }}>
+                        <Typography sx={{ color: device.status === 'Online' || device.status === 'ACTIVE' ? '#10B981' : '#EF4444', fontWeight: 700, fontSize: '0.725rem', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: device.status === 'Online' || device.status === 'ACTIVE' ? '#10B981' : '#EF4444' }} /> {device.status}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#94A3B8', fontSize: '0.625rem' }}>Last sync: {device.lastSync}</Typography>
                       </Box>
                     </Box>
-                    <Box sx={{ textAlign: 'right' }}>
-                      <Typography sx={{ color: '#EF4444', fontWeight: 700, fontSize: '0.725rem', display: 'flex', alignItems: 'center', gap: 0.5 }}><Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#EF4444' }} /> Low Battery</Typography>
-                      <Typography variant="caption" sx={{ color: '#94A3B8', fontSize: '0.625rem' }}>Last sync: 18 min ago</Typography>
-                    </Box>
-                  </Box>
 
-                  {/* Device stats */}
-                  <Box sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 2.25 }}>
-                    <Grid container spacing={2} sx={{ textAlign: 'center' }}>
-                      <Grid size={{ xs: 4 }}>
-                        <Typography variant="h5" sx={{ fontWeight: 800, color: '#EF4444' }}>12%</Typography>
-                        <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>BATTERY</Typography>
+                    {/* Device stats */}
+                    <Box sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 2.25 }}>
+                      <Grid container spacing={2} sx={{ textAlign: 'center' }}>
+                        <Grid size={{ xs: 4 }}>
+                          <Typography variant="h5" sx={{ fontWeight: 800, color: (device.battery !== '—' && typeof device.battery === 'number' && device.battery < 20) ? '#EF4444' : '#1A0E07' }}>
+                            {device.battery !== '—' ? `${device.battery}%` : '—'}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>BATTERY</Typography>
+                        </Grid>
+                        <Grid size={{ xs: 4 }}>
+                          <Typography variant="h5" sx={{ fontWeight: 800, color: '#1A0E07' }}>{device.alerts ? device.alerts.length : 0}</Typography>
+                          <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>ALERTS SENT</Typography>
+                        </Grid>
+                        <Grid size={{ xs: 4 }}>
+                          <Typography variant="h5" sx={{ fontWeight: 800, color: '#1A0E07', fontSize: '1.15rem', mt: 0.35 }}>Active</Typography>
+                          <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>STATUS</Typography>
+                        </Grid>
                       </Grid>
-                      <Grid size={{ xs: 4 }}>
-                        <Typography variant="h5" sx={{ fontWeight: 800, color: '#1A0E07' }}>3</Typography>
-                        <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>ALERTS SENT</Typography>
+
+                      {device.battery !== '—' && typeof device.battery === 'number' && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: -0.5 }}>
+                          <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.68rem', fontWeight: 600 }}>Battery</Typography>
+                          <Box sx={{ flexGrow: 1, height: 6, bgcolor: '#EAE5E0', borderRadius: '3px', overflow: 'hidden' }}>
+                            <Box sx={{ width: `${device.battery}%`, height: '100%', bgcolor: device.battery < 20 ? '#EF4444' : '#10B981' }} />
+                          </Box>
+                          <Typography sx={{ color: device.battery < 20 ? '#EF4444' : '#10B981', fontWeight: 700, fontSize: '0.725rem' }}>{device.battery}%</Typography>
+                        </Box>
+                      )}
+
+                      {/* Warning Battery Critical Alert */}
+                      {device.battery !== '—' && typeof device.battery === 'number' && device.battery < 20 && (
+                        <Box sx={{ p: 1.25, bgcolor: '#FEE2E2', border: '1px solid #FCA5A5', color: '#DC2626', borderRadius: '6px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600 }}>
+                          <WarningIcon sx={{ fontSize: 14, color: '#EF4444' }} />
+                          Battery critical — device may go offline. Please charge or replace immediately.
+                        </Box>
+                      )}
+
+                      {/* Metadata details list */}
+                      <Grid container spacing={1.5} sx={{ border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', p: 1.75, borderRadius: '8px' }}>
+                        <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>FIRMWARE</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#1A0E07' }}>{device.firmware}</Typography></Grid>
+                        <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>NETWORK</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#1A0E07' }}>{device.network}</Typography></Grid>
+                        <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>FALL SENSOR</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#059669' }}>{device.fallSensor}</Typography></Grid>
+                        <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>GPS</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#059669' }}>{device.gps}</Typography></Grid>
                       </Grid>
-                      <Grid size={{ xs: 4 }}>
-                        <Typography variant="h5" sx={{ fontWeight: 800, color: '#1A0E07', fontSize: '1.15rem', mt: 0.35 }}>Feb '24</Typography>
-                        <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700, fontSize: '0.65rem' }}>ASSIGNED</Typography>
-                      </Grid>
-                    </Grid>
 
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: -0.5 }}>
-                      <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.68rem', fontWeight: 600 }}>Battery</Typography>
-                      <Box sx={{ flexGrow: 1, height: 6, bgcolor: '#EAE5E0', borderRadius: '3px', overflow: 'hidden' }}>
-                        <Box sx={{ width: '12%', height: '100%', bgcolor: '#EF4444' }} />
-                      </Box>
-                      <Typography sx={{ color: '#EF4444', fontWeight: 700, fontSize: '0.725rem' }}>12%</Typography>
-                    </Box>
-
-                    {/* Warning Battery Critical Alert */}
-                    <Box sx={{ p: 1.25, bgcolor: '#FEE2E2', border: '1px solid #FCA5A5', color: '#DC2626', borderRadius: '6px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600 }}>
-                      <WarningIcon sx={{ fontSize: 14, color: '#EF4444' }} />
-                      Battery critical — device may go offline. Please charge or replace immediately.
-                    </Box>
-
-                    {/* Metadata details list */}
-                    <Grid container spacing={1.5} sx={{ border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', p: 1.75, borderRadius: '8px' }}>
-                      <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>FIRMWARE</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#1A0E07' }}>v2.1.0</Typography></Grid>
-                      <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>NETWORK</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#1A0E07' }}>WiFi - Connected</Typography></Grid>
-                      <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>BED EXIT SENSOR</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#059669' }}>Active</Typography></Grid>
-                      <Grid size={{ xs: 6 }}><Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.62rem' }}>MOTION DETECT</Typography><Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#059669' }}>Active</Typography></Grid>
-                    </Grid>
-
-                    {/* Alerts Log from device */}
-                    <Box>
-                      <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.62rem', letterSpacing: '0.5px', display: 'block', mb: 1 }}>
-                        RECENT ALERTS FROM THIS DEVICE
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                          <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#F97316' }} />
-                          <Typography variant="caption" sx={{ color: '#8C7E76', width: 60 }}>3 hrs ago</Typography>
-                          <Typography variant="body2" sx={{ color: '#1A0E07', fontSize: '0.78rem', fontWeight: 600 }}>Low battery (12%) — alert sent to admin</Typography>
+                      {/* Alerts Log from device */}
+                      {device.alerts && device.alerts.length > 0 && (
+                        <Box>
+                          <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.62rem', letterSpacing: '0.5px', display: 'block', mb: 1 }}>
+                            RECENT ALERTS FROM THIS DEVICE
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            {device.alerts.map((alert: any, idx: number) => (
+                              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }} key={idx}>
+                                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: alert.status === 'ACTIVE' || alert.status === 'CRITICAL' ? '#EF4444' : '#94A3B8' }} />
+                                <Typography variant="caption" sx={{ color: '#8C7E76', width: 60 }}>{alert.time.split(',')[0] || alert.time}</Typography>
+                                <Typography variant="body2" sx={{ color: '#1A0E07', fontSize: '0.78rem', fontWeight: 650 }}>{alert.type} - <Box component="span" sx={{ color: alert.status === 'ACTIVE' || alert.status === 'CRITICAL' ? '#EF4444' : '#94A3B8' }}>{alert.status}</Box></Typography>
+                              </Box>
+                            ))}
+                          </Box>
                         </Box>
-                        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                          <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#94A3B8' }} />
-                          <Typography variant="caption" sx={{ color: '#8C7E76', width: 60 }}>May 20</Typography>
-                          <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.78rem' }}>Bed exit at 2:14 AM — senior returned within 4 min</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                          <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#94A3B8' }} />
-                          <Typography variant="caption" sx={{ color: '#8C7E76', width: 60 }}>May 8</Typography>
-                          <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.78rem' }}>Bed exit at 3:40 AM — staff attended, resolved</Typography>
-                        </Box>
-                      </Box>
+                      )}
                     </Box>
-                  </Box>
-                </Card>
-              </Grid>
+                  </Card>
+                </Grid>
+              ))}
             </Grid>
           </Box>
         )}
@@ -1040,10 +914,15 @@ export const Seniors: React.FC = () => {
             {/* Table title header and filters */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
               <Typography variant="body2" sx={{ color: '#8C7E76', fontWeight: 600 }}>
-                All alerts for Meena Devi - SR-001 — showing 8 of 18 total
+                All alerts for {selectedSenior.name} - {selectedSenior.residentId} — showing {filteredSeniorAlerts.length} of {seniorAlerts.length} total
               </Typography>
               <Box sx={{ display: 'flex', gap: 1.5 }}>
-                <Select defaultValue="ALL" size="small" sx={{ minWidth: 120, bgcolor: '#FFFFFF', borderRadius: '6px' }}>
+                <Select
+                  value={alertTypeFilter}
+                  onChange={(e) => setAlertTypeFilter(e.target.value)}
+                  size="small"
+                  sx={{ minWidth: 120, bgcolor: '#FFFFFF', borderRadius: '6px' }}
+                >
                   <MenuItem value="ALL">All Types</MenuItem>
                   <MenuItem value="Fall">Fall Detected</MenuItem>
                   <MenuItem value="Dose">Missed Dose</MenuItem>
@@ -1053,6 +932,7 @@ export const Seniors: React.FC = () => {
                 <Button
                   variant="outlined"
                   size="small"
+                  onClick={handleExportAlertsCsv}
                   sx={{
                     color: '#1A0E07',
                     borderColor: '#EAE5E0',
@@ -1086,93 +966,58 @@ export const Seniors: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {/* Row 1 */}
-                  <TableRow sx={{ '&:hover': { bgcolor: '#FCFAF8' } }}>
-                    <TableCell sx={{ py: 1.75, fontWeight: 700, color: '#1A0E07', fontSize: '0.825rem' }}>May 30, 09:14 AM<Typography variant="caption" sx={{ display: 'block', color: '#8C7E76', fontSize: '0.68rem' }}>Today</Typography></TableCell>
-                    <TableCell sx={{ py: 1.75, fontWeight: 500, fontSize: '0.825rem' }}>Fall Detected</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="CRITICAL" size="small" sx={{ bgcolor: '#FEE2E2', color: '#DC2626', fontWeight: 800, fontSize: '0.6rem', borderRadius: '4px', height: 20 }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>EV-07B #4421</TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem', lineHeight: 1.4 }}>Accelerometer 4.2G impact. Posture drop confirmed.</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="Open" variant="outlined" size="small" sx={{ color: '#EF4444', borderColor: '#FCA5A5', fontWeight: 700, fontSize: '0.68rem', borderRadius: '4px' }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#8C7E76', fontSize: '0.825rem' }}>—</TableCell>
-                  </TableRow>
-
-                  {/* Row 2 */}
-                  <TableRow sx={{ '&:hover': { bgcolor: '#FCFAF8' } }}>
-                    <TableCell sx={{ py: 1.75, fontWeight: 700, color: '#1A0E07', fontSize: '0.825rem' }}>May 30, 08:00 AM<Typography variant="caption" sx={{ display: 'block', color: '#8C7E76', fontSize: '0.68rem' }}>Today</Typography></TableCell>
-                    <TableCell sx={{ py: 1.75, fontWeight: 500, fontSize: '0.825rem' }}>Missed Dose</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="MEDIUM" size="small" sx={{ bgcolor: '#FFFBEB', color: '#D97706', fontWeight: 800, fontSize: '0.6rem', borderRadius: '4px', height: 20 }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>Health Guard</TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem', lineHeight: 1.4 }}>Metformin 500mg morning dose missed</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="Noted" variant="outlined" size="small" sx={{ color: '#D97706', borderColor: '#FCD34D', fontWeight: 700, fontSize: '0.68rem', borderRadius: '4px' }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#8C7E76', fontSize: '0.825rem' }}>—</TableCell>
-                  </TableRow>
-
-                  {/* Row 3 */}
-                  <TableRow sx={{ '&:hover': { bgcolor: '#FCFAF8' } }}>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>May 29, 07:10 PM</TableCell>
-                    <TableCell sx={{ py: 1.75, fontWeight: 500, fontSize: '0.825rem' }}>Low Battery</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="LOW" size="small" sx={{ bgcolor: '#EFF6FF', color: '#2563EB', fontWeight: 800, fontSize: '0.6rem', borderRadius: '4px', height: 20 }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>Guard Rail #0091</TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem', lineHeight: 1.4 }}>Battery dropped to 12% — charge alert sent</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="Acknowledged" variant="outlined" size="small" sx={{ color: '#F59E0B', borderColor: '#FCD34D', fontWeight: 700, fontSize: '0.68rem', borderRadius: '4px' }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#1A0E07', fontWeight: 600, fontSize: '0.825rem' }}>Ravi K.</TableCell>
-                  </TableRow>
-
-                  {/* Row 4 */}
-                  <TableRow sx={{ '&:hover': { bgcolor: '#FCFAF8' } }}>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>May 27, 10:32 PM</TableCell>
-                    <TableCell sx={{ py: 1.75, fontWeight: 500, fontSize: '0.825rem' }}>Bed Exit</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="MEDIUM" size="small" sx={{ bgcolor: '#FFFBEB', color: '#D97706', fontWeight: 800, fontSize: '0.6rem', borderRadius: '4px', height: 20 }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>Guard Rail #0091</TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem', lineHeight: 1.4 }}>Nighttime bed exit at 10:32 PM — returned after 6 min</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="Resolved" variant="outlined" size="small" sx={{ color: '#10B981', borderColor: '#A7F3D0', fontWeight: 700, fontSize: '0.68rem', borderRadius: '4px' }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#1A0E07', fontWeight: 600, fontSize: '0.825rem' }}>Rajan J.</TableCell>
-                  </TableRow>
-
-                  {/* Row 5 */}
-                  <TableRow sx={{ '&:hover': { bgcolor: '#FCFAF8' } }}>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>May 14, 02:45 PM</TableCell>
-                    <TableCell sx={{ py: 1.75, fontWeight: 500, fontSize: '0.825rem' }}>Fall Detected</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="CRITICAL" size="small" sx={{ bgcolor: '#FEE2E2', color: '#DC2626', fontWeight: 800, fontSize: '0.6rem', borderRadius: '4px', height: 20 }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>EV-07B #4421</TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem', lineHeight: 1.4 }}>Fall alert triggered. Called senior — answered, confirmed false alarm.</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="False Alarm" variant="outlined" size="small" sx={{ color: '#6B7280', borderColor: '#D1D5DB', fontWeight: 700, fontSize: '0.68rem', borderRadius: '4px' }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#1A0E07', fontWeight: 600, fontSize: '0.825rem' }}>Ravi K.</TableCell>
-                  </TableRow>
-
-                  {/* Row 6 */}
-                  <TableRow sx={{ '&:hover': { bgcolor: '#FCFAF8' } }}>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>Apr 2, 08:18 AM</TableCell>
-                    <TableCell sx={{ py: 1.75, fontWeight: 500, fontSize: '0.825rem' }}>Fall Detected</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="CRITICAL" size="small" sx={{ bgcolor: '#FEE2E2', color: '#DC2626', fontWeight: 800, fontSize: '0.6rem', borderRadius: '4px', height: 20 }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>EV-07B #4421</TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem', lineHeight: 1.4 }}>Confirmed fall in corridor near Room 12-B. Dial4242 dispatched. Minor injury — no fracture.</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="Resolved" variant="outlined" size="small" sx={{ color: '#10B981', borderColor: '#A7F3D0', fontWeight: 700, fontSize: '0.68rem', borderRadius: '4px' }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#1A0E07', fontWeight: 600, fontSize: '0.825rem' }}>Priya K.</TableCell>
-                  </TableRow>
-
-                  {/* Row 7 */}
-                  <TableRow sx={{ '&:hover': { bgcolor: '#FCFAF8' } }}>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>Mar 15, 11:00 AM</TableCell>
-                    <TableCell sx={{ py: 1.75, fontWeight: 500, fontSize: '0.825rem' }}>Geofence Exit</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="CRITICAL" size="small" sx={{ bgcolor: '#FEE2E2', color: '#DC2626', fontWeight: 800, fontSize: '0.6rem', borderRadius: '4px', height: 20 }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>EV-07B #4421</TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem', lineHeight: 1.4 }}>Briefly exited Wing C boundary near stairwell. Returned within 3 min with attendant.</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="Resolved" variant="outlined" size="small" sx={{ color: '#10B981', borderColor: '#A7F3D0', fontWeight: 700, fontSize: '0.68rem', borderRadius: '4px' }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#1A0E07', fontWeight: 600, fontSize: '0.825rem' }}>Rajan J.</TableCell>
-                  </TableRow>
-
-                  {/* Row 8 */}
-                  <TableRow sx={{ '&:hover': { bgcolor: '#FCFAF8' } }}>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>Jan 22, 06:45 AM</TableCell>
-                    <TableCell sx={{ py: 1.75, fontWeight: 500, fontSize: '0.825rem' }}>Fall Detected</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="CRITICAL" size="small" sx={{ bgcolor: '#FEE2E2', color: '#DC2626', fontWeight: 800, fontSize: '0.6rem', borderRadius: '4px', height: 20 }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>EV-07B #4421</TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem', lineHeight: 1.4 }}>Fall in bathroom — confirmed. Wrist fracture (hairline). Admitted to hospital for 2 days. Returned Feb 3.</TableCell>
-                    <TableCell sx={{ py: 1.75 }}><Chip label="Resolved" variant="outlined" size="small" sx={{ color: '#10B981', borderColor: '#A7F3D0', fontWeight: 700, fontSize: '0.68rem', borderRadius: '4px' }} /></TableCell>
-                    <TableCell sx={{ py: 1.75, color: '#1A0E07', fontWeight: 600, fontSize: '0.825rem' }}>Ravi K.</TableCell>
-                  </TableRow>
+                  {filteredSeniorAlerts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 4, color: '#8C7E76' }}>
+                        No alerts logged for this senior.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredSeniorAlerts.map((alert) => (
+                      <TableRow key={alert.id} sx={{ '&:hover': { bgcolor: '#FCFAF8' } }}>
+                        <TableCell sx={{ py: 1.75, fontWeight: 700, color: '#1A0E07', fontSize: '0.825rem' }}>
+                          {alert.date}
+                          {alert.relative && (
+                            <Typography variant="caption" sx={{ display: 'block', color: '#8C7E76', fontSize: '0.68rem' }}>
+                              {alert.relative}
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell sx={{ py: 1.75, fontWeight: 500, fontSize: '0.825rem' }}>{alert.type}</TableCell>
+                        <TableCell sx={{ py: 1.75 }}>
+                          <Chip
+                            label={alert.severity}
+                            size="small"
+                            sx={{
+                              bgcolor: alert.severity === 'CRITICAL' ? '#FEE2E2' : alert.severity === 'MEDIUM' ? '#FFFBEB' : '#EFF6FF',
+                              color: alert.severity === 'CRITICAL' ? '#DC2626' : alert.severity === 'MEDIUM' ? '#D97706' : '#2563EB',
+                              fontWeight: 800,
+                              fontSize: '0.6rem',
+                              borderRadius: '4px',
+                              height: 20
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem' }}>{alert.device}</TableCell>
+                        <TableCell sx={{ py: 1.75, color: '#6E625B', fontSize: '0.825rem', lineHeight: 1.4 }}>{alert.description}</TableCell>
+                        <TableCell sx={{ py: 1.75 }}>
+                          <Chip
+                            label={alert.status}
+                            variant="outlined"
+                            size="small"
+                            sx={{
+                              color: alert.status === 'Open' || alert.status === 'ACTIVE' ? '#EF4444' : alert.status === 'Noted' || alert.status === 'Acknowledged' ? '#D97706' : '#10B981',
+                              borderColor: alert.status === 'Open' || alert.status === 'ACTIVE' ? '#FCA5A5' : alert.status === 'Noted' || alert.status === 'Acknowledged' ? '#FCD34D' : '#A7F3D0',
+                              fontWeight: 700,
+                              fontSize: '0.68rem',
+                              borderRadius: '4px'
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ py: 1.75, color: '#8C7E76', fontSize: '0.825rem' }}>{alert.resolvedBy}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -1185,280 +1030,168 @@ export const Seniors: React.FC = () => {
             {/* Guardians Header */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="body2" sx={{ color: '#8C7E76', fontWeight: 600 }}>
-                2 guardians linked to Meena Devi - SR-001
+                {seniorGuardians.length} guardians linked to {selectedSenior.name} - {selectedSenior.residentId}
               </Typography>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<AddIcon sx={{ fontSize: 13 }} />}
-                sx={{
-                  color: '#D45529',
-                  borderColor: '#D45529',
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  fontSize: '0.78rem',
-                  py: 0.5,
-                  px: 1.5,
-                  '&:hover': {
-                    borderColor: '#B23F1C',
-                    bgcolor: '#FFF2EC',
-                  }
-                }}
-              >
-                Add Guardian
-              </Button>
             </Box>
 
             {/* List of Guardians cards */}
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
-              {/* Guardian 1: Kavitha Meena */}
-              <Card sx={{ p: 3, border: '1px solid #EAE5E0', borderRadius: '8px', boxShadow: 'none', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-                {/* Guardian Header Row */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                    <Avatar sx={{ bgcolor: '#FEF3C7', color: '#D97706', width: 44, height: 44, fontSize: '1.1rem', fontWeight: 800 }}>KM</Avatar>
-                    <Box>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 750, color: '#1A0E07', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        Kavitha Meena
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.73rem' }}>Age 52 · Bangalore · kavitha.meena@gmail.com</Typography>
-                    </Box>
-                  </Box>
-                  <Box sx={{ textAlign: 'right' }}>
-                    <Chip label="Primary Guardian" size="small" sx={{ bgcolor: '#EFF6FF', color: '#2563EB', fontWeight: 800, fontSize: '0.65rem', borderRadius: '4px', mb: 0.5 }} />
-                    <Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.68rem', fontWeight: 550 }}>Daughter</Typography>
-                  </Box>
-                </Box>
+              {seniorGuardians.length === 0 ? (
+                <Card sx={{ p: 4, textAlign: 'center', border: '1px solid #EAE5E0', borderRadius: '8px', boxShadow: 'none' }}>
+                  <Typography variant="body2" sx={{ color: '#8C7E76' }}>No linked guardians found for this senior.</Typography>
+                </Card>
+              ) : (
+                seniorGuardians.map((guardian, index) => {
+                  const initials = guardian.name
+                    ? guardian.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
+                    : 'G';
+                  const isPrimary = index === 0 || String(guardian.relationship).toLowerCase().includes('primary');
+                  const avatarBg = isPrimary ? '#FEF3C7' : '#DBEAFE';
+                  const avatarColor = isPrimary ? '#D97706' : '#2563EB';
+                  const chipLabel = isPrimary ? 'Primary Guardian' : 'Secondary Guardian';
+                  const chipBg = isPrimary ? '#EFF6FF' : '#F3F4F6';
+                  const chipColor = isPrimary ? '#2563EB' : '#4B5563';
 
-                {/* Details info pills */}
-                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-                  <Chip label="Mobile: +91 98440 12345" size="small" sx={{ bgcolor: '#FAF8F6', color: '#6E625B', fontWeight: 600, fontSize: '0.725rem', borderRadius: '4px' }} />
-                  <Chip label="Email: kavitha.meena@gmail.com" size="small" sx={{ bgcolor: '#FAF8F6', color: '#6E625B', fontWeight: 600, fontSize: '0.725rem', borderRadius: '4px' }} />
-                  <Chip label="Address: Koramangala, Bangalore" size="small" sx={{ bgcolor: '#FAF8F6', color: '#6E625B', fontWeight: 600, fontSize: '0.725rem', borderRadius: '4px' }} />
-                  <Chip label="WhatsApp: Linked" size="small" sx={{ bgcolor: '#ECFDF5', color: '#059669', fontWeight: 700, fontSize: '0.725rem', borderRadius: '4px' }} />
-                </Box>
+                  const prefs = guardianPrefs[guardian.id] || {
+                    fallAlert: false,
+                    missedDoses: false,
+                    lowBattery: false,
+                    geofence: false,
+                    sosButton: false,
+                    weeklyReport: false
+                  };
 
-                <Divider sx={{ borderColor: '#F5F2EF' }} />
+                  const togglePref = (key: string, val: boolean) => {
+                    setGuardianPrefs(prev => ({
+                      ...prev,
+                      [guardian.id]: {
+                        ...prefs,
+                        [key]: val
+                      }
+                    }));
+                  };
 
-                {/* Switch notification preferences */}
-                <Box>
-                  <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.65rem', letterSpacing: '0.8px', display: 'block', mb: 1.5 }}>
-                    ALERT NOTIFICATION PREFERENCES
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
-                        <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>🚨 Fall Alert</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: kavithaPrefs.fallAlert ? '#059669' : '#8C7E76', fontWeight: 700 }}>{kavithaPrefs.fallAlert ? 'ON' : 'OFF'}</Typography>
-                          <Switch size="small" checked={kavithaPrefs.fallAlert} onChange={(e) => setKavithaPrefs({ ...kavithaPrefs, fallAlert: e.target.checked })} />
+                  return (
+                    <Card key={guardian.id} sx={{ p: 3, border: '1px solid #EAE5E0', borderRadius: '8px', boxShadow: 'none', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                      {/* Guardian Header Row */}
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                          <Avatar sx={{ bgcolor: avatarBg, color: avatarColor, width: 44, height: 44, fontSize: '1.1rem', fontWeight: 800 }}>{initials}</Avatar>
+                          <Box>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 750, color: '#1A0E07', display: 'flex', alignItems: 'center', gap: 1 }}>
+                              {guardian.name}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.73rem' }}>
+                              {[guardian.age ? `Age ${guardian.age}` : null, guardian.location || null, guardian.email].filter(Boolean).join(' · ')}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Box sx={{ textAlign: 'right' }}>
+                          <Chip label={chipLabel} size="small" sx={{ bgcolor: chipBg, color: chipColor, fontWeight: 800, fontSize: '0.65rem', borderRadius: '4px', mb: 0.5 }} />
+                          <Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.68rem', fontWeight: 550 }}>
+                            {guardian.relationship}
+                          </Typography>
                         </Box>
                       </Box>
-                    </Grid>
 
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
-                        <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>💊 Missed Doses</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: kavithaPrefs.missedDoses ? '#059669' : '#8C7E76', fontWeight: 700 }}>{kavithaPrefs.missedDoses ? 'ON' : 'OFF'}</Typography>
-                          <Switch size="small" checked={kavithaPrefs.missedDoses} onChange={(e) => setKavithaPrefs({ ...kavithaPrefs, missedDoses: e.target.checked })} />
-                        </Box>
+                      {/* Details info pills */}
+                      <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                        <Chip label={`Mobile: ${guardian.phone}`} size="small" sx={{ bgcolor: '#FAF8F6', color: '#6E625B', fontWeight: 600, fontSize: '0.725rem', borderRadius: '4px' }} />
+                        <Chip label={`Email: ${guardian.email}`} size="small" sx={{ bgcolor: '#FAF8F6', color: '#6E625B', fontWeight: 600, fontSize: '0.725rem', borderRadius: '4px' }} />
+                        {guardian.location && <Chip label={`City: ${guardian.location}`} size="small" sx={{ bgcolor: '#FAF8F6', color: '#6E625B', fontWeight: 600, fontSize: '0.725rem', borderRadius: '4px' }} />}
+                        {guardian.whatsapp && <Chip label="WhatsApp: Linked" size="small" sx={{ bgcolor: '#ECFDF5', color: '#059669', fontWeight: 700, fontSize: '0.725rem', borderRadius: '4px' }} />}
                       </Box>
-                    </Grid>
 
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
-                        <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>🔋 Low Battery</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: kavithaPrefs.lowBattery ? '#059669' : '#8C7E76', fontWeight: 700 }}>{kavithaPrefs.lowBattery ? 'ON' : 'OFF'}</Typography>
-                          <Switch size="small" checked={kavithaPrefs.lowBattery} onChange={(e) => setKavithaPrefs({ ...kavithaPrefs, lowBattery: e.target.checked })} />
-                        </Box>
+                      <Divider sx={{ borderColor: '#F5F2EF' }} />
+
+                      {/* Switch notification preferences */}
+                      <Box>
+                        <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.65rem', letterSpacing: '0.8px', display: 'block', mb: 1.5 }}>
+                          ALERT NOTIFICATION PREFERENCES
+                        </Typography>
+                        <Grid container spacing={2}>
+                          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
+                              <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>🚨 Fall Alert</Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Typography variant="caption" sx={{ color: prefs.fallAlert ? '#059669' : '#8C7E76', fontWeight: 700 }}>{prefs.fallAlert ? 'ON' : 'OFF'}</Typography>
+                                <Switch size="small" checked={prefs.fallAlert} onChange={(e) => togglePref('fallAlert', e.target.checked)} />
+                              </Box>
+                            </Box>
+                          </Grid>
+
+                          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
+                              <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>💊 Missed Doses</Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Typography variant="caption" sx={{ color: prefs.missedDoses ? '#059669' : '#8C7E76', fontWeight: 700 }}>{prefs.missedDoses ? 'ON' : 'OFF'}</Typography>
+                                <Switch size="small" checked={prefs.missedDoses} onChange={(e) => togglePref('missedDoses', e.target.checked)} />
+                              </Box>
+                            </Box>
+                          </Grid>
+
+                          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
+                              <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>🔋 Low Battery</Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Typography variant="caption" sx={{ color: prefs.lowBattery ? '#059669' : '#8C7E76', fontWeight: 700 }}>{prefs.lowBattery ? 'ON' : 'OFF'}</Typography>
+                                <Switch size="small" checked={prefs.lowBattery} onChange={(e) => togglePref('lowBattery', e.target.checked)} />
+                              </Box>
+                            </Box>
+                          </Grid>
+
+                          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
+                              <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>🗺️ Geofence Breach</Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Typography variant="caption" sx={{ color: prefs.geofence ? '#059669' : '#8C7E76', fontWeight: 700 }}>{prefs.geofence ? 'ON' : 'OFF'}</Typography>
+                                <Switch size="small" checked={prefs.geofence} onChange={(e) => togglePref('geofence', e.target.checked)} />
+                              </Box>
+                            </Box>
+                          </Grid>
+
+                          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
+                              <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>🆘 SOS Button</Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Typography variant="caption" sx={{ color: prefs.sosButton ? '#059669' : '#8C7E76', fontWeight: 700 }}>{prefs.sosButton ? 'ON' : 'OFF'}</Typography>
+                                <Switch size="small" checked={prefs.sosButton} onChange={(e) => togglePref('sosButton', e.target.checked)} />
+                              </Box>
+                            </Box>
+                          </Grid>
+
+                          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
+                              <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>📊 Weekly Report</Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Typography variant="caption" sx={{ color: prefs.weeklyReport ? '#059669' : '#8C7E76', fontWeight: 700 }}>{prefs.weeklyReport ? 'ON' : 'OFF'}</Typography>
+                                <Switch size="small" checked={prefs.weeklyReport} onChange={(e) => togglePref('weeklyReport', e.target.checked)} />
+                              </Box>
+                            </Box>
+                          </Grid>
+                        </Grid>
                       </Box>
-                    </Grid>
 
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
-                        <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>🗺️ Geofence Breach</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: kavithaPrefs.geofence ? '#059669' : '#8C7E76', fontWeight: 700 }}>{kavithaPrefs.geofence ? 'ON' : 'OFF'}</Typography>
-                          <Switch size="small" checked={kavithaPrefs.geofence} onChange={(e) => setKavithaPrefs({ ...kavithaPrefs, geofence: e.target.checked })} />
+                      {/* Recent Notifications logs */}
+                      {guardian.notes && (
+                        <Box>
+                          <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.62rem', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
+                            RECENT NOTIFICATIONS SENT
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="body2" sx={{ color: '#1A0E07', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                {guardian.notes}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: '#8C7E76' }}>Recent</Typography>
+                            </Box>
+                          </Box>
                         </Box>
-                      </Box>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
-                        <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>🆘 SOS Button</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: kavithaPrefs.sosButton ? '#059669' : '#8C7E76', fontWeight: 700 }}>{kavithaPrefs.sosButton ? 'ON' : 'OFF'}</Typography>
-                          <Switch size="small" checked={kavithaPrefs.sosButton} onChange={(e) => setKavithaPrefs({ ...kavithaPrefs, sosButton: e.target.checked })} />
-                        </Box>
-                      </Box>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
-                        <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>📊 Weekly Report</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: kavithaPrefs.weeklyReport ? '#059669' : '#8C7E76', fontWeight: 700 }}>{kavithaPrefs.weeklyReport ? 'ON' : 'OFF'}</Typography>
-                          <Switch size="small" checked={kavithaPrefs.weeklyReport} onChange={(e) => setKavithaPrefs({ ...kavithaPrefs, weeklyReport: e.target.checked })} />
-                        </Box>
-                      </Box>
-                    </Grid>
-                  </Grid>
-                </Box>
-
-                {/* Recent Notifications logs */}
-                <Box>
-                  <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.62rem', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
-                    RECENT NOTIFICATIONS SENT
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="body2" sx={{ color: '#1A0E07', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        💬 Fall alert — Meena Devi - WhatsApp + SMS sent
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#8C7E76' }}>09:14 AM today</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        💬 Missed dose alert — 4 this week - WhatsApp
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#8C7E76' }}>Yesterday</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        💬 Weekly health summary — May 19–25
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#8C7E76' }}>May 26</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        💬 Fall alert — resolved as false alarm
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#8C7E76' }}>May 14</Typography>
-                    </Box>
-                  </Box>
-                </Box>
-              </Card>
-
-              {/* Guardian 2: Suresh Meena */}
-              <Card sx={{ p: 3, border: '1px solid #EAE5E0', borderRadius: '8px', boxShadow: 'none', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-                {/* Guardian Header Row */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                    <Avatar sx={{ bgcolor: '#DBEAFE', color: '#2563EB', width: 44, height: 44, fontSize: '1.1rem', fontWeight: 800 }}>SM</Avatar>
-                    <Box>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 750, color: '#1A0E07', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        Suresh Meena
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.73rem' }}>Age 48 · Chennai · suresh.meena@outlook.com</Typography>
-                    </Box>
-                  </Box>
-                  <Box sx={{ textAlign: 'right' }}>
-                    <Chip label="Secondary Guardian" size="small" sx={{ bgcolor: '#F3F4F6', color: '#4B5563', fontWeight: 800, fontSize: '0.65rem', borderRadius: '4px', mb: 0.5 }} />
-                    <Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.68rem', fontWeight: 550 }}>Son</Typography>
-                  </Box>
-                </Box>
-
-                {/* Details info pills */}
-                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-                  <Chip label="Mobile: +91 98445 67890" size="small" sx={{ bgcolor: '#FAF8F6', color: '#6E625B', fontWeight: 600, fontSize: '0.725rem', borderRadius: '4px' }} />
-                  <Chip label="Email: suresh.meena@outlook.com" size="small" sx={{ bgcolor: '#FAF8F6', color: '#6E625B', fontWeight: 600, fontSize: '0.725rem', borderRadius: '4px' }} />
-                  <Chip label="City: Chennai" size="small" sx={{ bgcolor: '#FAF8F6', color: '#6E625B', fontWeight: 600, fontSize: '0.725rem', borderRadius: '4px' }} />
-                </Box>
-
-                <Divider sx={{ borderColor: '#F5F2EF' }} />
-
-                {/* Switch notification preferences */}
-                <Box>
-                  <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.65rem', letterSpacing: '0.8px', display: 'block', mb: 1.5 }}>
-                    ALERT NOTIFICATION PREFERENCES
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
-                        <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>🚨 Fall Alert</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: sureshPrefs.fallAlert ? '#059669' : '#8C7E76', fontWeight: 700 }}>{sureshPrefs.fallAlert ? 'ON' : 'OFF'}</Typography>
-                          <Switch size="small" checked={sureshPrefs.fallAlert} onChange={(e) => setSureshPrefs({ ...sureshPrefs, fallAlert: e.target.checked })} />
-                        </Box>
-                      </Box>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
-                        <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>💊 Missed Doses</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: sureshPrefs.missedDoses ? '#059669' : '#8C7E76', fontWeight: 700 }}>{sureshPrefs.missedDoses ? 'ON' : 'OFF'}</Typography>
-                          <Switch size="small" checked={sureshPrefs.missedDoses} onChange={(e) => setSureshPrefs({ ...sureshPrefs, missedDoses: e.target.checked })} />
-                        </Box>
-                      </Box>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
-                        <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>🔋 Low Battery</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: sureshPrefs.lowBattery ? '#059669' : '#8C7E76', fontWeight: 700 }}>{sureshPrefs.lowBattery ? 'ON' : 'OFF'}</Typography>
-                          <Switch size="small" checked={sureshPrefs.lowBattery} onChange={(e) => setSureshPrefs({ ...sureshPrefs, lowBattery: e.target.checked })} />
-                        </Box>
-                      </Box>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
-                        <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>🗺️ Geofence Breach</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: sureshPrefs.geofence ? '#059669' : '#8C7E76', fontWeight: 700 }}>{sureshPrefs.geofence ? 'ON' : 'OFF'}</Typography>
-                          <Switch size="small" checked={sureshPrefs.geofence} onChange={(e) => setSureshPrefs({ ...sureshPrefs, geofence: e.target.checked })} />
-                        </Box>
-                      </Box>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
-                        <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>🆘 SOS Button</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: sureshPrefs.sosButton ? '#059669' : '#8C7E76', fontWeight: 700 }}>{sureshPrefs.sosButton ? 'ON' : 'OFF'}</Typography>
-                          <Switch size="small" checked={sureshPrefs.sosButton} onChange={(e) => setSureshPrefs({ ...sureshPrefs, sosButton: e.target.checked })} />
-                        </Box>
-                      </Box>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid #FAF8F6', bgcolor: '#FAF8F6', borderRadius: '6px' }}>
-                        <Typography sx={{ fontSize: '0.78rem', color: '#1A0E07', fontWeight: 600 }}>📊 Weekly Report</Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: sureshPrefs.weeklyReport ? '#059669' : '#8C7E76', fontWeight: 700 }}>{sureshPrefs.weeklyReport ? 'ON' : 'OFF'}</Typography>
-                          <Switch size="small" checked={sureshPrefs.weeklyReport} onChange={(e) => setSureshPrefs({ ...sureshPrefs, weeklyReport: e.target.checked })} />
-                        </Box>
-                      </Box>
-                    </Grid>
-                  </Grid>
-                </Box>
-
-                {/* Recent Notifications logs */}
-                <Box>
-                  <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 800, fontSize: '0.62rem', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
-                    RECENT NOTIFICATIONS SENT
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="body2" sx={{ color: '#1A0E07', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        💬 Fall alert — Meena Devi - SMS sent (WhatsApp pending)
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#8C7E76' }}>09:14 AM today</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        💬 Fall alert — resolved as false alarm - SMS
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#8C7E76' }}>May 14</Typography>
-                    </Box>
-                  </Box>
-                </Box>
-              </Card>
+                      )}
+                    </Card>
+                  );
+                })
+              )}
             </Box>
           </Box>
         )}
@@ -1479,7 +1212,7 @@ export const Seniors: React.FC = () => {
                     multiline
                     rows={3}
                     fullWidth
-                    placeholder="Add a care note, observation, or incident record for Meena Devi..."
+                    placeholder={`Add a care note, observation, or incident record for ${selectedSenior.name || 'this resident'}...`}
                     value={noteText}
                     onChange={(e) => setNoteText(e.target.value)}
                     sx={{
@@ -1555,7 +1288,7 @@ export const Seniors: React.FC = () => {
                       {index > 0 && <Divider sx={{ borderColor: '#F5F2EF', mb: 3.5 }} />}
                       <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
                         <Avatar sx={{ bgcolor: log.avatarBg, width: 32, height: 32, fontSize: '0.8rem', fontWeight: 800 }}>
-                          {log.author.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                          {log.author.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
                         </Avatar>
                         <Box sx={{ flexGrow: 1 }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 0.75 }}>
@@ -1624,7 +1357,7 @@ export const Seniors: React.FC = () => {
 
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2" sx={{ color: '#6E625B', fontSize: '0.8rem', fontWeight: 500 }}>Last entry</Typography>
-                    <Typography variant="body2" sx={{ color: '#1A0E07', fontWeight: 700, fontSize: '0.78rem' }}>Today, 09:14 AM</Typography>
+                    <Typography variant="body2" sx={{ color: '#1A0E07', fontWeight: 700, fontSize: '0.78rem' }}>{lastNoteTime}</Typography>
                   </Box>
                 </Box>
               </Card>
@@ -1636,41 +1369,27 @@ export const Seniors: React.FC = () => {
                 </Typography>
 
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25 }}>
-                  {/* Milestone 1 */}
-                  <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
-                    <Box sx={{ mt: 0.5, width: 8, height: 8, borderRadius: '50%', bgcolor: '#4F46E5', flexShrink: 0 }} />
-                    <Box>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07', fontSize: '0.8rem' }}>Admitted</Typography>
-                      <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.7rem', display: 'block', mt: 0.1 }}>February 12, 2024 · 473 days ago</Typography>
+                  {selectedSenior.admissionDate && selectedSenior.admissionDate !== '—' && (
+                    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                      <Box sx={{ mt: 0.5, width: 8, height: 8, borderRadius: '50%', bgcolor: '#4F46E5', flexShrink: 0 }} />
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07', fontSize: '0.8rem' }}>Admitted</Typography>
+                        <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.7rem', display: 'block', mt: 0.1 }}>{selectedSenior.admissionDate}</Typography>
+                      </Box>
                     </Box>
-                  </Box>
-
-                  {/* Milestone 2 */}
-                  <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
-                    <Box sx={{ mt: 0.5, width: 8, height: 8, borderRadius: '50%', bgcolor: '#EF4444', flexShrink: 0 }} />
-                    <Box>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07', fontSize: '0.8rem' }}>Wrist fracture</Typography>
-                      <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.7rem', display: 'block', mt: 0.1 }}>January 22, 2026 · Hospitalised 2 days</Typography>
+                  )}
+                  {seniorDevices.map((device) => (
+                    <Box key={device.id} sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                      <Box sx={{ mt: 0.5, width: 8, height: 8, borderRadius: '50%', bgcolor: '#10B981', flexShrink: 0 }} />
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07', fontSize: '0.8rem' }}>{device.name} assigned</Typography>
+                        <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.7rem', display: 'block', mt: 0.1 }}>IMEI: {device.imei}</Typography>
+                      </Box>
                     </Box>
-                  </Box>
-
-                  {/* Milestone 3 */}
-                  <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
-                    <Box sx={{ mt: 0.5, width: 8, height: 8, borderRadius: '50%', bgcolor: '#EC4899', flexShrink: 0 }} />
-                    <Box>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07', fontSize: '0.8rem' }}>Dementia diagnosed</Typography>
-                      <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.7rem', display: 'block', mt: 0.1 }}>March 2025</Typography>
-                    </Box>
-                  </Box>
-
-                  {/* Milestone 4 */}
-                  <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
-                    <Box sx={{ mt: 0.5, width: 8, height: 8, borderRadius: '50%', bgcolor: '#10B981', flexShrink: 0 }} />
-                    <Box>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 750, color: '#1A0E07', fontSize: '0.8rem' }}>EV-07B assigned</Typography>
-                      <Typography variant="caption" sx={{ color: '#8C7E76', fontSize: '0.7rem', display: 'block', mt: 0.1 }}>March 2024</Typography>
-                    </Box>
-                  </Box>
+                  ))}
+                  {(!selectedSenior.admissionDate || selectedSenior.admissionDate === '—') && seniorDevices.length === 0 && (
+                    <Typography variant="body2" sx={{ color: '#8C7E76', fontSize: '0.8rem' }}>No milestones recorded yet.</Typography>
+                  )}
                 </Box>
               </Card>
             </Grid>
@@ -1678,8 +1397,22 @@ export const Seniors: React.FC = () => {
         )}
       </Box>
 
-      {/* Trigger Dialog Alert Modal */}
-      <FallAlertModal open={openFallAlert} onClose={() => setOpenFallAlert(false)} />
+      {/* Trigger Dialog Alert Modal — shows the currently selected resident's real data */}
+      <FallAlertModal
+        open={openFallAlert}
+        onClose={() => setOpenFallAlert(false)}
+        patient={{
+          name: selectedSenior.name,
+          age: selectedSenior.age || undefined,
+          gender: selectedSenior.gender !== '—' ? selectedSenior.gender : undefined,
+          condition: selectedSenior.activeConditions?.[0],
+          room: selectedSenior.room !== '—' ? selectedSenior.room : undefined,
+          device: seniorDevices[0]?.name,
+          battery: typeof seniorDevices[0]?.battery === 'number' ? seniorDevices[0].battery : undefined,
+          alertTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        }}
+        respondedBy={currentUserName ? `${currentUserName}${currentUserRole ? ` (${currentUserRole})` : ''}` : undefined}
+      />
     </Box>
   );
 };

@@ -1,3 +1,10 @@
+/**
+ * types.ts — the shapes of data sent to and received from the backend.
+ *
+ * Grouped to mirror services.ts: Auth, Profile, Senior, Monitor, Compliance,
+ * Device, Vitals, Alarm/Events, CRM, Admin. If the backend API changes a
+ * field, this is the file to update.
+ */
 export type UUID = string;
 
 // Roles allowed
@@ -9,11 +16,6 @@ export interface UserSignInRequest {
   email: string;
   password: string;
   platform: string;
-}
-
-export interface MobileSignInRequest {
-  phoneNumber: string;
-  otp: string;
 }
 
 export interface EmailSignUpRequest {

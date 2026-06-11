@@ -10,50 +10,69 @@ import WarningIcon from '@mui/icons-material/Warning';
 
 interface ActionItem {
   id: string;
+  tab: string; // which page (sidebar tab) this action opens
+  adminOnly: boolean;
   title: string;
   description: string;
   icon: React.ReactNode;
 }
 
-export const QuickActions: React.FC = () => {
+interface QuickActionsProps {
+  role?: string;
+  onNavigate: (tab: string) => void;
+}
+
+export const QuickActions: React.FC<QuickActionsProps> = ({ role, onNavigate }) => {
   const actions: ActionItem[] = [
     {
       id: 'users',
+      tab: 'users',
+      adminOnly: true,
       title: 'Manage Users',
       description: 'Create, edit or deactivate user accounts',
       icon: <ManageAccountsIcon />,
     },
     {
       id: 'seniors',
+      tab: 'seniors',
+      adminOnly: false,
       title: 'Senior Profiles',
       description: 'View and manage senior registrations',
       icon: <ElderlyIcon />,
     },
     {
       id: 'mappings',
+      tab: 'guardians',
+      adminOnly: true,
       title: 'Guardian Mappings',
       description: 'Approve or manage guardian-senior links',
       icon: <SupervisorAccountIcon />,
     },
     {
       id: 'registry',
+      tab: 'devices',
+      adminOnly: true,
       title: 'Device Registry',
       description: 'Register, monitor and assign wearables',
       icon: <AppRegistrationIcon />,
     },
     {
       id: 'assignments',
+      tab: 'devices',
+      adminOnly: true,
       title: 'Device Assignments',
       description: 'Assign or unassign devices to seniors',
       icon: <AssignmentIndIcon />,
     },
     {
       id: 'alarms',
+      tab: 'alerts',
+      adminOnly: false,
       title: 'Alarm Events',
       description: 'Review panic, fall and geofence alerts',
       icon: <WarningIcon />,
     },
-  ];
+  ].filter((action) => !action.adminOnly || role === 'ADMIN');
 
   return (
     <Card sx={{ height: '100%' }}>
@@ -73,6 +92,7 @@ export const QuickActions: React.FC = () => {
           <React.Fragment key={action.id}>
             <ListItem disablePadding>
               <ListItemButton
+                onClick={() => onNavigate(action.tab)}
                 sx={{
                   px: 0.5,
                   py: 1.5,
