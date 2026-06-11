@@ -38,7 +38,7 @@ import DeviceHubIcon from '@mui/icons-material/DeviceHub';
 
 import { FallAlertModal } from '../components/FallAlertModal';
 import { DataState } from '../components/DataState';
-import { SeniorService, DeviceAssignmentService, AlarmService, ComplianceService } from '../api';
+import { SeniorService, DeviceAssignmentService, AlarmService, ComplianceService, AdminService } from '../api';
 
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
@@ -99,10 +99,15 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
 
-  // Load Seniors from API
+  // Load Seniors from API.
+  // Admins see ALL seniors (/v1/admin/seniors); guardians see only the
+  // seniors mapped to them (/v1/seniors/my-seniors) — per the backend spec.
   const loadSeniors = () => {
     setPageError(null);
-    SeniorService.getMySeniors()
+    const apiCall = currentUserRole === 'ADMIN'
+      ? AdminService.adminGetSeniors()
+      : SeniorService.getMySeniors();
+    apiCall
       .then((res) => {
         setPageLoading(false);
         if (res) {
@@ -202,9 +207,10 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
       });
   };
 
+  // Re-run when the role arrives (the profile loads a moment after sign-in)
   useEffect(() => {
     loadSeniors();
-  }, []);
+  }, [currentUserRole]);
 
   // Load selected senior's details (devices, alarms, etc.)
   useEffect(() => {
@@ -364,6 +370,24 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
   const incidentNotesCount = activityLogs.filter(l => l.category === 'INCIDENT').length;
   const medicalNotesCount = activityLogs.filter(l => l.category === 'MEDICAL').length;
   const lastNoteTime = activityLogs.length > 0 ? activityLogs[0].time : '—';
+
+  // No seniors in the system yet — explain instead of showing a blank profile
+  if (!pageLoading && !pageError && seniorsList.length === 0) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 6 }}>
+        <Card sx={{ maxWidth: 520, width: '100%', textAlign: 'center', py: 6, px: 4 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 1.5, color: '#1A0E07' }}>
+            No seniors found
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#8C7E76', lineHeight: 1.6 }}>
+            {currentUserRole === 'ADMIN'
+              ? 'There are no senior residents registered in the system yet. Create a user with the SENIOR role on the Users page, then map a guardian to them on the Guardians page.'
+              : 'No seniors are mapped to your account yet. Ask an administrator to link you to a senior, or send a mapping request.'}
+          </Typography>
+        </Card>
+      </Box>
+    );
+  }
 
   return (
     <DataState loading={pageLoading} error={pageError} onRetry={loadSeniors}>
