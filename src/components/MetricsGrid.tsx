@@ -14,14 +14,16 @@ interface MetricItem {
   value: number;
   icon: React.ReactNode;
   linkText: string;
+  tab: string; // sidebar tab this card's link opens
   isAlert?: boolean;
 }
 
 interface MetricsGridProps {
   role?: string;
+  onNavigate: (tab: string) => void;
 }
 
-export const MetricsGrid: React.FC<MetricsGridProps> = ({ role }) => {
+export const MetricsGrid: React.FC<MetricsGridProps> = ({ role, onNavigate }) => {
   const [counts, setCounts] = useState({
     users: 0,
     seniors: 0,
@@ -72,6 +74,8 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({ role }) => {
     }
   }, [role]);
 
+  const isAdmin = role === 'ADMIN';
+
   const metrics: MetricItem[] = [
     {
       id: 'users',
@@ -79,6 +83,7 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({ role }) => {
       value: counts.users,
       icon: <PeopleIcon />,
       linkText: 'View all users',
+      tab: 'users',
     },
     {
       id: 'seniors',
@@ -86,6 +91,7 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({ role }) => {
       value: counts.seniors,
       icon: <ElderlyIcon />,
       linkText: 'View seniors',
+      tab: 'seniors',
     },
     {
       id: 'devices',
@@ -93,6 +99,7 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({ role }) => {
       value: counts.devices,
       icon: <SmartphoneIcon />,
       linkText: 'View devices',
+      tab: 'devices',
     },
     {
       id: 'approvals',
@@ -100,6 +107,7 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({ role }) => {
       value: counts.approvals,
       icon: <HourglassEmptyIcon />,
       linkText: 'View mappings',
+      tab: 'guardians',
     },
     {
       id: 'alarms',
@@ -107,9 +115,14 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({ role }) => {
       value: counts.alarms,
       icon: <NotificationsActiveIcon />,
       linkText: 'View alerts',
+      tab: 'alerts',
       isAlert: true,
     },
-  ];
+    // Hide links to admin-only pages from non-admin users (matches sidebar)
+  ].map((m) => ({
+    ...m,
+    linkText: !isAdmin && ['users', 'devices', 'guardians'].includes(m.tab) ? '' : m.linkText,
+  }));
 
   return (
     <Grid container spacing={2.5}>
@@ -175,36 +188,41 @@ export const MetricsGrid: React.FC<MetricsGridProps> = ({ role }) => {
               </Typography>
             </Box>
 
-            {/* Footer link with ArrowForwardIcon */}
-            <Link
-              href="#"
-              underline="none"
-              sx={{
-                fontSize: '0.75rem',
-                color: '#8C7E76',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 0.5,
-                width: 'fit-content',
-                '&:hover': {
-                  color: '#D45529',
-                  '& .link-arrow': {
-                    transform: 'translateX(2px)',
+            {/* Footer link — navigates to the matching page */}
+            {metric.linkText && (
+              <Link
+                component="button"
+                type="button"
+                onClick={() => onNavigate(metric.tab)}
+                underline="none"
+                sx={{
+                  fontSize: '0.75rem',
+                  color: '#8C7E76',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  width: 'fit-content',
+                  cursor: 'pointer',
+                  '&:hover': {
+                    color: '#D45529',
+                    '& .link-arrow': {
+                      transform: 'translateX(2px)',
+                    },
                   },
-                },
-              }}
-            >
-              {metric.linkText}
-              <ArrowForwardIcon 
-                className="link-arrow" 
-                sx={{ 
-                  fontSize: 12, 
-                  transition: 'transform 0.2s ease',
-                  color: 'inherit'
-                }} 
-              />
-            </Link>
+                }}
+              >
+                {metric.linkText}
+                <ArrowForwardIcon
+                  className="link-arrow"
+                  sx={{
+                    fontSize: 12,
+                    transition: 'transform 0.2s ease',
+                    color: 'inherit'
+                  }}
+                />
+              </Link>
+            )}
           </Card>
         </Grid>
       ))}

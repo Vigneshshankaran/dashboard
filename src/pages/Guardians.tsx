@@ -97,21 +97,26 @@ export const Guardians: React.FC = () => {
             const senior = m.senior || {};
             const guardian = m.guardian || {};
 
-            const seniorName = senior.firstName || senior.lastName 
-              ? `${senior.firstName || ''} ${senior.lastName || ''}`.trim() 
+            const sFirst = senior.firstName || senior.first_name || '';
+            const sLast = senior.lastName || senior.last_name || '';
+            const seniorName = sFirst || sLast 
+              ? `${sFirst} ${sLast}`.trim() 
               : m.seniorName || 'Senior';
 
             const seniorEmail = senior.primaryEmail || senior.email || m.seniorEmail || '—';
-            const seniorPhone = senior.phoneNumber ? String(senior.phoneNumber) : m.seniorPhone || '—';
+            const sPhone = senior.phoneNumber || senior.phone_number;
+            const seniorPhone = sPhone ? String(sPhone) : m.seniorPhone || '—';
 
-            const guardianName = guardian.firstName || guardian.lastName 
-              ? `${guardian.firstName || ''} ${guardian.lastName || ''}`.trim() 
+            const gFirst = guardian.firstName || guardian.first_name || '';
+            const gLast = guardian.lastName || guardian.last_name || '';
+            const guardianName = gFirst || gLast 
+              ? `${gFirst} ${gLast}`.trim() 
               : m.guardianName || 'Guardian';
 
             const guardianEmail = guardian.primaryEmail || guardian.email || m.guardianEmail || '—';
 
             let dateStr = '—';
-            const rawDate = m.createdAt || m.createdDate || m.date;
+            const rawDate = m.createdAt || m.created_at || m.createdDate || m.date;
             if (rawDate) {
               const d = new Date(rawDate);
               dateStr = d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });

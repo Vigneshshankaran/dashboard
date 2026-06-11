@@ -18,6 +18,11 @@ export interface UserSignInRequest {
   platform: string;
 }
 
+export interface MobileSignInRequest {
+  phoneNumber: string;
+  otp: string;
+}
+
 export interface EmailSignUpRequest {
   firstName: string;
   lastName: string;
@@ -111,19 +116,20 @@ export interface UploadReportsRequest {
 }
 
 // Device Registration Interfaces
+// Only identifier and name are required — the rest may be omitted/null
 export interface DeviceRegistrationRequest {
   deviceIdentifier: string;
   deviceName: string;
-  module: string;
-  iccid: string;
-  mac: string;
-  model: string;
-  deviceTypeId: string;
-  deviceType: string;
-  firmwareVersion: string;
-  networkType: string;
-  serverTimestamp: number;
-  imei: string;
+  module?: string;
+  iccid?: string;
+  mac?: string | null;
+  model?: string;
+  deviceTypeId?: string;
+  deviceType?: string;
+  firmwareVersion?: string;
+  networkType?: string;
+  serverTimestamp?: number;
+  imei?: string;
 }
 
 // Device Assignment Interfaces

@@ -105,14 +105,16 @@ export const Users: React.FC = () => {
             else if (role === 'GUARDIAN') { avatarBg = '#D1FAE5'; avatarColor = '#10B981'; }
             else if (role === 'MONITOR') { avatarBg = '#FEF3C7'; avatarColor = '#F59E0B'; }
 
-            const name = u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'User';
+            const fName = u.firstName || u.first_name || '';
+            const lName = u.lastName || u.last_name || '';
+            const name = u.name || `${fName} ${lName}`.trim() || 'User';
 
             return {
               id: u.id || u.userId || String(Math.random()),
               name,
               username: u.userName || u.username || '—',
               email: u.primaryEmail || u.email || '—',
-              phone: u.phoneNumber ? String(u.phoneNumber) : '—',
+              phone: (u.phoneNumber || u.phone_number) ? String(u.phoneNumber || u.phone_number) : '—',
               role,
               status: u.active || u.status === 'ACTIVE' ? 'Active' : 'Offline',
               avatarBg,
@@ -163,8 +165,8 @@ export const Users: React.FC = () => {
   const handleStartEdit = (user: any) => {
     const raw = user.rawUser || {};
     setEditingUserId(user.id);
-    setEditFirstName(raw.firstName || user.name.split(' ')[0] || '');
-    setEditLastName(raw.lastName || user.name.split(' ').slice(1).join(' ') || '');
+    setEditFirstName(raw.firstName || raw.first_name || user.name.split(' ')[0] || '');
+    setEditLastName(raw.lastName || raw.last_name || user.name.split(' ').slice(1).join(' ') || '');
     setEditUsername(user.username !== '—' ? user.username : '');
     setEditPhone(user.phone !== '—' ? user.phone : '');
     setEditEmail(user.email !== '—' ? user.email : '');

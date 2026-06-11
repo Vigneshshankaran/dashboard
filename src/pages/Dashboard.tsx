@@ -76,7 +76,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ role, onNavigate }) => {
 
       {/* Metric Cards Grid */}
       <Box>
-        <MetricsGrid key={`metrics-${refreshKey}`} role={role} />
+        <MetricsGrid key={`metrics-${refreshKey}`} role={role} onNavigate={onNavigate} />
       </Box>
 
       {/* Lower Workspace Grid */}

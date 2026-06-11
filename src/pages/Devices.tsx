@@ -98,6 +98,8 @@ export const Devices: React.FC = () => {
   const [newDeviceMacAddress, setNewDeviceMacAddress] = useState('');
   const [newDeviceFirmware, setNewDeviceFirmware] = useState('');
   const [newDeviceNetwork, setNewDeviceNetwork] = useState('');
+  const [newDeviceType, setNewDeviceType] = useState('');
+  const [newDeviceTypeId, setNewDeviceTypeId] = useState('');
   const [showCustomNetwork, setShowCustomNetwork] = useState(false);
 
   // Close Register Device Dialog & Reset State
@@ -111,6 +113,8 @@ export const Devices: React.FC = () => {
     setNewDeviceMacAddress('');
     setNewDeviceFirmware('');
     setNewDeviceNetwork('');
+    setNewDeviceType('');
+    setNewDeviceTypeId('');
   };
 
   // Page load / error state
@@ -130,15 +134,17 @@ export const Devices: React.FC = () => {
         setPageLoading(false);
         if (res) {
           const list: DeviceItem[] = res.map((d: any) => ({
-            id: d.uuid || d.id || String(d.deviceTypeId || Math.random()),
-            name: d.deviceName || d.name || 'Unnamed Device',
+            // Real API fields: id, deviceName, imei, deviceIdentifier, model,
+            // networkType, status (ACTIVE/REVOKED), batteryLevel, lastSeen
+            id: d.id,
+            name: d.deviceName || 'Unnamed Device',
             imei: d.imei || d.deviceIdentifier || '—',
             model: d.model || '—',
             network: d.networkType || '—',
-            status: d.status === 'BLOCKED' ? 'BLOCKED' : 'ACTIVE',
-            assignedToName: d.assignedToName || '—',
-            assignedToPhone: d.assignedToPhone || '—',
-            battery: d.batteryLevel !== undefined ? `${d.batteryLevel}%` : '—',
+            status: d.status === 'REVOKED' ? 'BLOCKED' : 'ACTIVE',
+            assignedToName: '—',
+            assignedToPhone: '—',
+            battery: d.batteryLevel !== null && d.batteryLevel !== undefined ? `${d.batteryLevel}%` : '—',
           }));
           setDevices(list);
         }
@@ -154,27 +160,18 @@ export const Devices: React.FC = () => {
     AdminService.adminGetAssignments()
       .then((res) => {
         if (res) {
-          const list: AssignmentItem[] = res.map((a: any, idx: number) => {
-            // Tolerate flat fields or nested device/senior objects
-            const dev = a.device || {};
-            const sen = a.senior || {};
-            const seniorName =
-              a.seniorName ||
-              sen.name ||
-              `${sen.firstName || sen.first_name || ''} ${sen.lastName || sen.last_name || ''}`.trim() ||
-              'Senior';
-            const seniorPhoneRaw = a.seniorPhone || sen.phoneNumber || sen.phone_number;
-            return {
-              id: a.id || a.assignmentId || String(idx),
-              deviceUUID: a.deviceUUID || dev.uuid || dev.id || '',
-              deviceName: a.deviceName || dev.deviceName || dev.name || a.deviceUUID || 'Device',
-              deviceImei: a.deviceImei || dev.imei || dev.deviceIdentifier || '—',
-              seniorName,
-              seniorPhone: seniorPhoneRaw ? String(seniorPhoneRaw) : '—',
-              status: 'ASSIGNED',
-              assignedAt: a.assignedAt || '—',
-            };
-          });
+          const list: AssignmentItem[] = res.map((a: any) => ({
+            // Real API flat fields: assignmentId, deviceId, deviceName, deviceIdentifier,
+            // imei, seniorFirstName, seniorLastName, seniorPhone, status, assignedAt
+            id: a.assignmentId,
+            deviceUUID: a.deviceId,
+            deviceName: a.deviceName || a.deviceIdentifier || '—',
+            deviceImei: a.imei || a.deviceIdentifier || '—',
+            seniorName: `${a.seniorFirstName || ''} ${a.seniorLastName || ''}`.trim() || '—',
+            seniorPhone: a.seniorPhone ? String(a.seniorPhone) : '—',
+            status: 'ASSIGNED',
+            assignedAt: a.assignedAt || '—',
+          }));
           setAssignments(list);
         }
       })
@@ -183,30 +180,24 @@ export const Devices: React.FC = () => {
       });
   };
 
-  // The devices endpoint doesn't include who a device is assigned to — that
-  // lives in the assignments endpoint. Join the two by device UUID or IMEI.
+  // Join devices with assignments by deviceId
   const getAssignedSenior = (device: DeviceItem) =>
-    assignments.find(
-      (a) =>
-        (a.deviceUUID && a.deviceUUID === device.id) ||
-        (a.deviceImei !== '—' && a.deviceImei === device.imei) ||
-        (a.deviceName !== 'Device' && a.deviceName === device.name)
-    );
+    assignments.find((a) => a.deviceUUID === device.id);
 
   // Register Device Handler
   const handleRegisterDevice = () => {
     if (!newDeviceName.trim()) return;
 
     const payload = {
-      deviceIdentifier: newDeviceImei.trim() || newDeviceIdentifier.trim() || String(Date.now()),
+      deviceIdentifier: newDeviceIdentifier.trim() || newDeviceImei.trim() || String(Date.now()),
       deviceName: newDeviceName.trim(),
-      module: newDeviceModel.trim() || 'EV-06',
+      module: newDeviceModel.trim() || undefined,
       iccid: '',
-      mac: newDeviceMacAddress.trim(),
-      model: newDeviceModel.trim(),
-      deviceTypeId: '1',
-      deviceType: 'Wearable',
-      firmwareVersion: newDeviceFirmware.trim() || 'v1.0.0',
+      mac: newDeviceMacAddress.trim() || null,
+      model: newDeviceModel.trim() || undefined,
+      deviceTypeId: newDeviceTypeId.trim() || '782',
+      deviceType: newDeviceType.trim(),
+      firmwareVersion: newDeviceFirmware.trim() || undefined,
       networkType: newDeviceNetwork.trim() || '4G',
       serverTimestamp: Date.now(),
       imei: newDeviceImei.trim(),
@@ -219,7 +210,7 @@ export const Devices: React.FC = () => {
       })
       .catch((err) => {
         console.error('Failed to register device in API:', err);
-        alert('Failed to register device in API.');
+        alert(`Registration failed: ${err?.message || 'Unknown error from server'}`);
       });
   };
 
@@ -1234,6 +1225,52 @@ export const Devices: React.FC = () => {
                   }}
                 />
               )}
+            </Box>
+
+            {/* Row 8: Device Type * */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography sx={{ width: 140, fontSize: '0.875rem', fontWeight: 600, color: '#1A0E07' }}>
+                Device Type *
+              </Typography>
+              <TextField
+                fullWidth
+                placeholder="e.g. EV07BA (exact value from backend)"
+                value={newDeviceType}
+                onChange={(e) => setNewDeviceType(e.target.value)}
+                size="small"
+                helperText="Must exactly match backend enum (case-sensitive)"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '6px',
+                    '& fieldset': { borderColor: '#EAE5E0' },
+                    '&:hover fieldset': { borderColor: '#4F46E5' },
+                    '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Row 9: Device Type ID */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography sx={{ width: 140, fontSize: '0.875rem', fontWeight: 600, color: '#1A0E07' }}>
+                Type ID
+              </Typography>
+              <TextField
+                fullWidth
+                placeholder="e.g. 782 (default: 782)"
+                value={newDeviceTypeId}
+                onChange={(e) => setNewDeviceTypeId(e.target.value)}
+                size="small"
+                helperText="Numeric device type identifier (leave blank for 782)"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '6px',
+                    '& fieldset': { borderColor: '#EAE5E0' },
+                    '&:hover fieldset': { borderColor: '#4F46E5' },
+                    '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                  }
+                }}
+              />
             </Box>
           </Box>
         </DialogContent>

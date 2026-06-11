@@ -114,49 +114,58 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
         setPageLoading(false);
         if (res) {
           const list = res.map((s: any) => {
-            const name = s.name || `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Unnamed Senior';
+            const name = s.name || `${s.firstName || s.first_name || ''} ${s.lastName || s.last_name || ''}`.trim() || 'Unnamed Senior';
             let age = 0;
             let dobStr = '—';
-            if (s.dateOfBirth) {
-              const dobDate = new Date(s.dateOfBirth);
+            const rawDob = s.dateOfBirth || s.dob || s.date_of_birth;
+            if (rawDob) {
+              const dobDate = new Date(rawDob);
               dobStr = dobDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
               const diff = Date.now() - dobDate.getTime();
               age = Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25)) || 0;
             }
+            const isMaleVal = s.isMale !== undefined ? s.isMale : s.is_male;
+            const genderVal = s.gender || (isMaleVal !== undefined ? (isMaleVal ? 'Male' : 'Female') : '—');
+            const createdTime = s.createdAt || s.created_at;
+            const admissionDateVal = s.admissionDate || s.admission_date || (createdTime ? new Date(createdTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
+
+            const medConditions = s.medicalConditions || s.medical_conditions || '';
+            const activeConditionsVal = s.activeConditions || (medConditions ? String(medConditions).split(',').map((c: string) => c.trim()).filter(Boolean) : []);
+
             return {
-              id: s.id || s.seniorId || '—',
+              id: s.id || s.seniorId || s.uuid || '—',
               name,
-              gender: s.gender || '—',
+              gender: genderVal,
               age,
               dob: dobStr,
-              bloodGroup: s.bloodGroup || '—',
+              bloodGroup: s.bloodGroup || s.blood_group || '—',
               room: s.room || '—',
-              residentId: s.residentId || s.id || '—',
-              admissionDate: s.admissionDate || '—',
-              mobilityAid: s.mobilityAid || '—',
-              fallsCount: s.fallsCount ?? 0,
-              medCompliance: s.medCompliance ?? 0,
-              devicesCount: s.devicesCount ?? 0,
-              latestSpo2: s.latestSpo2 ?? 0,
-              latestBp: s.latestBp || '—',
-              guardiansCount: s.guardiansCount ?? 0,
-              latestHeartRate: s.latestHeartRate ?? 0,
-              latestTemperature: s.latestTemperature ?? 0,
-              latestBloodGlucose: s.latestBloodGlucose ?? 0,
-              latestRespRate: s.latestRespRate ?? 0,
+              residentId: s.residentId || s.id || s.seniorId || s.uuid || '—',
+              admissionDate: admissionDateVal,
+              mobilityAid: s.mobilityAid || s.mobility_aid || '—',
+              fallsCount: s.fallsCount ?? s.falls_count ?? 0,
+              medCompliance: s.medCompliance ?? s.med_compliance ?? 0,
+              devicesCount: s.devicesCount ?? s.devices_count ?? 0,
+              latestSpo2: s.latestSpo2 ?? s.latest_spo2 ?? 0,
+              latestBp: s.latestBp || s.latest_bp || '—',
+              guardiansCount: s.guardiansCount ?? s.guardians_count ?? 0,
+              latestHeartRate: s.latestHeartRate ?? s.latest_heart_rate ?? 0,
+              latestTemperature: s.latestTemperature ?? s.latest_temperature ?? 0,
+              latestBloodGlucose: s.latestBloodGlucose ?? s.latest_blood_glucose ?? 0,
+              latestRespRate: s.latestRespRate ?? s.latest_resp_rate ?? 0,
               nationality: s.nationality || '—',
               language: s.language || '—',
               religion: s.religion || '—',
-              primaryPhysician: s.primaryPhysician || '—',
-              physicianPhone: s.physicianPhone || '—',
+              primaryPhysician: s.primaryPhysician || s.primary_physician || '—',
+              physicianPhone: s.physicianPhone || s.physician_phone || '—',
               caregiver: s.caregiver || '—',
-              floorAttendant: s.floorAttendant || '—',
+              floorAttendant: s.floorAttendant || s.floor_attendant || '—',
               dietitian: s.dietitian || '—',
               physiotherapist: s.physiotherapist || '—',
-              fallRisk: s.fallRisk || '—',
-              wanderRisk: s.wanderRisk || '—',
-              cardiacRisk: s.cardiacRisk || '—',
-              activeConditions: s.activeConditions || (s.medicalConditions ? String(s.medicalConditions).split(',').map((c: string) => c.trim()).filter(Boolean) : []),
+              fallRisk: s.fallRisk || s.fall_risk || '—',
+              wanderRisk: s.wanderRisk || s.wander_risk || '—',
+              cardiacRisk: s.cardiacRisk || s.cardiac_risk || '—',
+              activeConditions: activeConditionsVal,
               allergies: s.allergies || '',
             };
           });

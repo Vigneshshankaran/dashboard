@@ -99,15 +99,15 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ role }) => {
           System Status
         </Typography>
 
-        {/* Live Indicator */}
+        {/* Connection indicator — reflects the real health check result */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box
             sx={{
               width: 6,
               height: 6,
               borderRadius: '50%',
-              backgroundColor: '#10B981',
-              animation: 'pulse 2s infinite',
+              backgroundColor: platformStatus === 'Operational' ? '#10B981' : '#EF4444',
+              animation: platformStatus === 'Operational' ? 'pulse 2s infinite' : 'none',
               '@keyframes pulse': {
                 '0%': { transform: 'scale(0.95)', opacity: 0.8 },
                 '50%': { transform: 'scale(1.3)', opacity: 1 },
@@ -119,11 +119,11 @@ export const SystemStatus: React.FC<SystemStatusProps> = ({ role }) => {
             variant="body2"
             sx={{
               fontWeight: 700,
-              color: '#10B981',
+              color: platformStatus === 'Operational' ? '#10B981' : '#EF4444',
               fontSize: '0.8rem',
             }}
           >
-            Live
+            {platformStatus === 'Operational' ? 'Live' : platformStatus}
           </Typography>
         </Box>
       </Box>

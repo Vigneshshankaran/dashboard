@@ -101,7 +101,7 @@ export const Monitors: React.FC = () => {
             const monitor = m.monitor || usersById[m.monitorId || m.monitorUUID] || {};
 
             let dateStr = '—';
-            const rawDate = m.createdAt || m.createdDate || m.date;
+            const rawDate = m.createdAt || m.created_at || m.createdDate || m.date;
             if (rawDate) {
               const d = new Date(rawDate);
               if (!isNaN(d.getTime())) {

@@ -147,7 +147,17 @@ export async function request<T = any>(path: string, options: RequestOptions = {
   }
 
   if (!response.ok) {
-    const errorMessage = data?.message || data || `HTTP error! status: ${response.status}`;
+    let errorMessage = '';
+    if (data) {
+      if (typeof data === 'string') {
+        errorMessage = data;
+      } else {
+        errorMessage = data.message || data.errorMessage || data.error || JSON.stringify(data);
+      }
+    }
+    if (!errorMessage) {
+      errorMessage = `HTTP error! status: ${response.status}`;
+    }
     throw new ApiError(errorMessage, response.status, data);
   }
 

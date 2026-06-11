@@ -15,6 +15,7 @@ import type {
   UUID,
   UserRole,
   UserSignInRequest,
+  MobileSignInRequest,
   EmailSignUpRequest,
   UpdateProfileRequest,
   UserLoginDTO,
@@ -50,6 +51,17 @@ import type {
 export const AuthService = {
   signin: (body: UserSignInRequest) =>
     request<AuthTokens>('/v1/auth/signin', { method: 'POST', body, skipAuth: true }),
+
+  signinMobile: (body: MobileSignInRequest) =>
+    request('/v1/auth/signin/mobile', { method: 'POST', body, skipAuth: true }),
+
+  signinMobileVerify: (body: MobileSignInRequest, platform?: string) =>
+    request<AuthTokens>('/v1/auth/signin/mobile/verify', {
+      method: 'POST',
+      body,
+      headers: platform ? { 'X-Platform': platform } : undefined,
+      skipAuth: true,
+    }),
 
   signupEmail: (body: EmailSignUpRequest) =>
     request('/v1/auth/signup/email', { method: 'POST', body, skipAuth: true }),

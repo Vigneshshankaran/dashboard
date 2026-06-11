@@ -23,7 +23,7 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SaveIcon from '@mui/icons-material/Save';
 import CloseIcon from '@mui/icons-material/Close';
-import { ProfileService } from '../api';
+import { ProfileService, AuthService } from '../api';
 
 
 interface ProfileProps {
@@ -77,6 +77,16 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
   // Toast / Snackbar state
   const [openSnackbar, setOpenSnackbar] = useState(false);
 
+  // Local account details states from API
+  const [userId, setUserId] = useState('');
+  const [status, setStatus] = useState('ACTIVE');
+  const [authProvider, setAuthProvider] = useState('EMAIL');
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [lastLogin, setLastLogin] = useState('—');
+  const [memberSince, setMemberSince] = useState('—');
+  const [lastUpdated, setLastUpdated] = useState('—');
+
   useEffect(() => {
     ProfileService.getProfile()
       .then((response) => {
@@ -100,11 +110,60 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
           if (lName) setLastName(lName);
           if (uName) setUsername(uName);
           if (phoneNum) setPhone(String(phoneNum));
-          if (res.dob) setDob(new Date(res.dob).toISOString().split('T')[0]);
-          if (res.gender) setGender(res.gender);
-          if (res.maritalStatus) setMaritalStatus(res.maritalStatus);
-          if (res.nationality) setNationality(res.nationality);
-          if (res.occupation) setOccupation(res.occupation);
+
+          // Set Account Details from API response
+          setUserId(res.user_id || res.id || res.userId || '');
+          if (res.status) setStatus(res.status);
+          
+          const authProv = res.authProvider || res.auth_provider;
+          if (authProv) setAuthProvider(authProv);
+          
+          const emailVer = res.emailVerified !== undefined ? res.emailVerified : res.email_verified;
+          if (emailVer !== undefined) setEmailVerified(!!emailVer);
+          
+          const phoneVer = res.phoneVerified !== undefined ? res.phoneVerified : res.phone_verified;
+          if (phoneVer !== undefined) setPhoneVerified(!!phoneVer);
+
+          const formatDate = (ts: any) => {
+            if (!ts) return '—';
+            const d = new Date(ts);
+            return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+          };
+
+          if (res.lastLoginAt) setLastLogin(formatDate(res.lastLoginAt));
+          else if (res.last_login_at) setLastLogin(formatDate(res.last_login_at));
+
+          if (res.createdAt) setMemberSince(formatDate(res.createdAt));
+          else if (res.created_at) setMemberSince(formatDate(res.created_at));
+
+          if (res.updatedAt) setLastUpdated(formatDate(res.updatedAt));
+          else if (res.updated_at) setLastUpdated(formatDate(res.updated_at));
+          
+          const pInfo = res.personalInfo || res.personal_info || res || {};
+          const heightVal = pInfo.height ?? res.height ?? '';
+          const weightVal = pInfo.weight ?? res.weight ?? '';
+          const bg = pInfo.bloodGroup || pInfo.blood_group || res.bloodGroup || res.blood_group || '';
+          const alg = pInfo.allergies || res.allergies || '';
+          const cond = pInfo.medicalConditions || pInfo.medical_conditions || res.medicalConditions || res.medical_conditions || '';
+          const dobVal = res.dob || res.dateOfBirth || res.date_of_birth || pInfo.dob || pInfo.dateOfBirth || pInfo.date_of_birth;
+
+          if (dobVal) setDob(new Date(dobVal).toISOString().split('T')[0]);
+          setGender(pInfo.gender || res.gender || '');
+          setMaritalStatus(pInfo.maritalStatus || pInfo.marital_status || res.maritalStatus || res.marital_status || '');
+          setNationality(pInfo.nationality || res.nationality || '');
+          setOccupation(pInfo.occupation || res.occupation || '');
+          setHeight(heightVal ? String(heightVal) : '');
+          setWeight(weightVal ? String(weightVal) : '');
+          setBloodGroup(bg);
+          setAllergies(alg);
+          setMedicalConditions(cond);
+
+          setAddressLine1(pInfo.addressLine1 || pInfo.address_line1 || res.addressLine1 || res.address_line1 || '');
+          setAddressLine2(pInfo.addressLine2 || pInfo.address_line2 || res.addressLine2 || res.address_line2 || '');
+          setCity(pInfo.city || res.city || '');
+          setState(pInfo.state || res.state || '');
+          setCountry(pInfo.country || res.country || '');
+          setPostalCode(pInfo.postalCode || pInfo.postal_code || res.postalCode || res.postal_code || '');
         }
       })
       .catch((err) => {
@@ -125,7 +184,29 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
       dob: dob ? new Date(dob).getTime() : Date.now(),
     };
 
-    ProfileService.updateProfile(updatePayload)
+    const personalInfoPayload = {
+      dateOfBirth: dob ? new Date(dob).getTime() : Date.now(),
+      gender: gender,
+      maritalStatus: maritalStatus,
+      nationality: nationality,
+      occupation: occupation,
+      height: Number(height) || 0.0,
+      weight: Number(weight) || 0.0,
+      bloodGroup: bloodGroup,
+      allergies: allergies,
+      medicalConditions: medicalConditions,
+      addressLine1: addressLine1,
+      addressLine2: addressLine2,
+      city: city,
+      state: state,
+      country: country,
+      postalCode: postalCode,
+    };
+
+    Promise.all([
+      ProfileService.updateProfile(updatePayload),
+      ProfileService.updatePersonalInfo(personalInfoPayload),
+    ])
       .then(() => {
         onUpdateProfile({
           name: fullName,
@@ -138,8 +219,8 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
         setOpenSnackbar(true);
       })
       .catch((err) => {
-        console.error('Failed to update profile on API:', err);
-        alert('Failed to update profile on API.');
+        console.error('Failed to update profile or personal info on API:', err);
+        alert('Failed to update profile or personal info on API.');
       });
   };
 
@@ -149,6 +230,31 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
     setLastName(profile.name.split(' ').slice(1).join(' ') || '');
     setPhone(profile.phone);
     setIsEditing(false);
+  };
+
+  const handleVerifyEmail = () => {
+    if (!userId) return;
+    AuthService.verifyEmail(userId)
+      .then(() => {
+        setEmailVerified(true);
+        alert('Email verified successfully!');
+      })
+      .catch((err: any) => {
+        console.error('Failed to verify email:', err);
+        alert('Failed to verify email.');
+      });
+  };
+
+  const handleVerifyPhone = () => {
+    ProfileService.verifyPhone()
+      .then(() => {
+        setPhoneVerified(true);
+        alert('Phone verified successfully!');
+      })
+      .catch((err: any) => {
+        console.error('Failed to verify phone:', err);
+        alert('Failed to verify phone.');
+      });
   };
 
   return (
@@ -596,7 +702,7 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
                     lineHeight: 1.3,
                   }}
                 >
-                  d0ccca74-0fd2-4c96-9b03-4d0434fd6310
+                  {userId || '—'}
                 </Typography>
               </Box>
               <Divider sx={{ borderColor: '#F5F2EF' }} />
@@ -607,7 +713,7 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
                   ROLE
                 </Typography>
                 <Chip
-                  label={profile.role}
+                  label={profile.role || '—'}
                   size="small"
                   sx={{
                     bgcolor: '#F59E0B',
@@ -626,11 +732,11 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
                   STATUS
                 </Typography>
                 <Chip
-                  label="ACTIVE"
+                  label={status}
                   size="small"
                   sx={{
-                    bgcolor: '#ECFDF5',
-                    color: '#10B981',
+                    bgcolor: status === 'ACTIVE' ? '#ECFDF5' : '#FEF2F2',
+                    color: status === 'ACTIVE' ? '#10B981' : '#EF4444',
                     fontWeight: 700,
                     fontSize: '0.725rem',
                     borderRadius: '6px',
@@ -645,7 +751,7 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
                   AUTH PROVIDER
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#1A0E07', fontWeight: 700 }}>
-                  EMAIL
+                  {authProvider}
                 </Typography>
               </Box>
               <Divider sx={{ borderColor: '#F5F2EF' }} />
@@ -655,27 +761,42 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
                 <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700 }}>
                   EMAIL VERIFIED
                 </Typography>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<CheckCircleIcon sx={{ fontSize: 13, color: '#D45529' }} />}
-                  sx={{
-                    borderColor: '#D45529',
-                    color: '#D45529',
-                    fontSize: '0.725rem',
-                    fontWeight: 700,
-                    borderRadius: '6px',
-                    py: 0.25,
-                    px: 1,
-                    textTransform: 'none',
-                    '&:hover': {
-                      bgcolor: '#FEF2F2',
-                      borderColor: '#B23F1C',
-                    },
-                  }}
-                >
-                  Verify Email
-                </Button>
+                {emailVerified ? (
+                  <Chip
+                    label="VERIFIED"
+                    size="small"
+                    sx={{
+                      bgcolor: '#D1FAE5',
+                      color: '#065F46',
+                      fontWeight: 700,
+                      fontSize: '0.725rem',
+                      borderRadius: '6px',
+                    }}
+                  />
+                ) : (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handleVerifyEmail}
+                    startIcon={<CheckCircleIcon sx={{ fontSize: 13, color: '#D45529' }} />}
+                    sx={{
+                      borderColor: '#D45529',
+                      color: '#D45529',
+                      fontSize: '0.725rem',
+                      fontWeight: 700,
+                      borderRadius: '6px',
+                      py: 0.25,
+                      px: 1,
+                      textTransform: 'none',
+                      '&:hover': {
+                        bgcolor: '#FEF2F2',
+                        borderColor: '#B23F1C',
+                      },
+                    }}
+                  >
+                    Verify Email
+                  </Button>
+                )}
               </Box>
               <Divider sx={{ borderColor: '#F5F2EF' }} />
 
@@ -684,27 +805,42 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
                 <Typography variant="caption" sx={{ color: '#8C7E76', fontWeight: 700 }}>
                   PHONE VERIFIED
                 </Typography>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<CheckCircleIcon sx={{ fontSize: 13, color: '#D45529' }} />}
-                  sx={{
-                    borderColor: '#D45529',
-                    color: '#D45529',
-                    fontSize: '0.725rem',
-                    fontWeight: 700,
-                    borderRadius: '6px',
-                    py: 0.25,
-                    px: 1,
-                    textTransform: 'none',
-                    '&:hover': {
-                      bgcolor: '#FEF2F2',
-                      borderColor: '#B23F1C',
-                    },
-                  }}
-                >
-                  Verify Phone
-                </Button>
+                {phoneVerified ? (
+                  <Chip
+                    label="VERIFIED"
+                    size="small"
+                    sx={{
+                      bgcolor: '#D1FAE5',
+                      color: '#065F46',
+                      fontWeight: 700,
+                      fontSize: '0.725rem',
+                      borderRadius: '6px',
+                    }}
+                  />
+                ) : (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handleVerifyPhone}
+                    startIcon={<CheckCircleIcon sx={{ fontSize: 13, color: '#D45529' }} />}
+                    sx={{
+                      borderColor: '#D45529',
+                      color: '#D45529',
+                      fontSize: '0.725rem',
+                      fontWeight: 700,
+                      borderRadius: '6px',
+                      py: 0.25,
+                      px: 1,
+                      textTransform: 'none',
+                      '&:hover': {
+                        bgcolor: '#FEF2F2',
+                        borderColor: '#B23F1C',
+                      },
+                    }}
+                  >
+                    Verify Phone
+                  </Button>
+                )}
               </Box>
               <Divider sx={{ borderColor: '#F5F2EF' }} />
 
@@ -714,7 +850,7 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
                   LAST LOGIN
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#6E625B', fontWeight: 600, fontSize: '0.8rem' }}>
-                  01 Jun 2026, 01:50 pm
+                  {lastLogin}
                 </Typography>
               </Box>
               <Divider sx={{ borderColor: '#F5F2EF' }} />
@@ -725,7 +861,7 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
                   MEMBER SINCE
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#6E625B', fontWeight: 600, fontSize: '0.8rem' }}>
-                  24 Mar 2026, 07:20 am
+                  {memberSince}
                 </Typography>
               </Box>
               <Divider sx={{ borderColor: '#F5F2EF' }} />
@@ -736,7 +872,7 @@ export const Profile: React.FC<ProfileProps> = ({ profile, onUpdateProfile }) =>
                   LAST UPDATED
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#6E625B', fontWeight: 600, fontSize: '0.8rem' }}>
-                  01 Jun 2026, 01:50 pm
+                  {lastUpdated}
                 </Typography>
               </Box>
             </Box>

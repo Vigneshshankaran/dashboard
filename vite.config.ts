@@ -11,8 +11,12 @@ export default defineConfig({
         target: 'https://project-ze144.vercel.app',
         changeOrigin: true,
         configure: (proxy) => {
-          proxy.on('proxyReq', (proxyReq) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
             proxyReq.setHeader('origin', 'https://project-ze144.vercel.app');
+            const auth = req.headers['authorization'];
+            if (auth) {
+              console.log('[PROXY] Auth Header:', auth);
+            }
           });
         }
       }
