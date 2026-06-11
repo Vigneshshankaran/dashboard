@@ -250,7 +250,7 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
           name: d.deviceName || d.name || 'Wearable Device',
           deviceId: d.deviceTypeId ? `#${d.deviceTypeId}` : '—',
           imei: d.imei || d.deviceIdentifier || '—',
-          status: d.status === 'BLOCKED' ? 'Blocked' : (d.status || 'Active'),
+          status: d.status || '—', // backend value as-is (ACTIVE / REVOKED)
           battery: typeof d.batteryLevel === 'number' ? d.batteryLevel : '—',
           firmware: d.firmwareVersion || '—',
           network: d.networkType || '—',
@@ -1024,8 +1024,8 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
                         </Box>
                       </Box>
                       <Box sx={{ textAlign: 'right' }}>
-                        <Typography sx={{ color: device.status === 'Online' || device.status === 'ACTIVE' ? '#10B981' : '#EF4444', fontWeight: 700, fontSize: '0.725rem', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: device.status === 'Online' || device.status === 'ACTIVE' ? '#10B981' : '#EF4444' }} /> {device.status}
+                        <Typography sx={{ color: device.status === 'ACTIVE' ? '#10B981' : '#EF4444', fontWeight: 700, fontSize: '0.725rem', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: device.status === 'ACTIVE' ? '#10B981' : '#EF4444' }} /> {device.status}
                         </Typography>
                         <Typography variant="caption" sx={{ color: '#94A3B8', fontSize: '0.625rem' }}>Last sync: {device.lastSync}</Typography>
                       </Box>

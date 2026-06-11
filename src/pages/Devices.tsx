@@ -46,7 +46,7 @@ interface DeviceItem {
   imei: string;
   model: string;
   network: string;
-  status: 'ACTIVE' | 'BLOCKED';
+  status: string; // backend value as-is, e.g. ACTIVE / REVOKED
   assignedToName: string;
   assignedToPhone: string;
   battery: string;
@@ -141,7 +141,7 @@ export const Devices: React.FC = () => {
             imei: d.imei || d.deviceIdentifier || '—',
             model: d.model || '—',
             network: d.networkType || '—',
-            status: d.status === 'REVOKED' ? 'BLOCKED' : 'ACTIVE',
+            status: d.status || '—', // show the backend's status exactly as sent (ACTIVE / REVOKED)
             assignedToName: '—',
             assignedToPhone: '—',
             battery: d.batteryLevel !== null && d.batteryLevel !== undefined ? `${d.batteryLevel}%` : '—',
@@ -570,7 +570,7 @@ export const Devices: React.FC = () => {
                               size="small"
                               title="Revoke device (permanent)"
                               onClick={() => handleRevokeDevice(device.id)}
-                              disabled={device.status === 'BLOCKED'}
+                              disabled={device.status === 'REVOKED'}
                               sx={{
                                 color: '#1A0E07',
                                 border: '1px solid #EAE5E0',
