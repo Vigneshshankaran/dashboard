@@ -23,12 +23,17 @@ import {
   Select,
   MenuItem,
   InputAdornment,
+  Tooltip,
+  CircularProgress,
+  Divider,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import AddIcon from '@mui/icons-material/Add';
 import BoltIcon from '@mui/icons-material/Bolt';
 import BlockIcon from '@mui/icons-material/Block';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import HistoryIcon from '@mui/icons-material/History';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import SettingsIcon from '@mui/icons-material/Settings';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
@@ -88,6 +93,17 @@ export const Devices: React.FC = () => {
   // Assignments view state values
   const [selectedAssignDevice, setSelectedAssignDevice] = useState('');
   const [selectedAssignSenior, setSelectedAssignSenior] = useState('');
+  const [seniorsData, setSeniorsData] = useState<any[]>([]); // raw seniors from /v1/admin/seniors
+
+  // Detail popups for the assignments table
+  const [deviceDetail, setDeviceDetail] = useState<any | null>(null);
+  const [seniorDetail, setSeniorDetail] = useState<any | null>(null);
+  const [auditDialog, setAuditDialog] = useState<{ open: boolean; loading: boolean; logs: any[]; error: string | null }>({
+    open: false,
+    loading: false,
+    logs: [],
+    error: null,
+  });
 
   // Dialog State for Register Device
   const [openRegisterDialog, setOpenRegisterDialog] = useState(false);
@@ -121,11 +137,22 @@ export const Devices: React.FC = () => {
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
 
-  // Load devices and assignments from API
+  // Load devices, assignments, and seniors (assign dropdown + detail popups)
   useEffect(() => {
     fetchDevices();
     fetchAssignments();
+    fetchSeniors();
   }, []);
+
+  const fetchSeniors = () => {
+    AdminService.adminGetSeniors()
+      .then((res) => {
+        setSeniorsData(Array.isArray(res) ? res : res?.data ?? []);
+      })
+      .catch((err) => {
+        console.warn('Failed to fetch seniors from API:', err);
+      });
+  };
 
   const fetchDevices = () => {
     setPageError(null);
@@ -278,6 +305,37 @@ export const Devices: React.FC = () => {
       .catch((err) => {
         console.error('Failed to unassign device in API:', err);
         alert('Failed to unassign device in API.');
+      });
+  };
+
+  // ─── Assignment table detail popups ────────────────────────────────────────
+  const openDeviceDetails = (assignment: any) => {
+    // Use the registry record when we have it; otherwise show what the assignment carries
+    const dev = devices.find((d) => d.id === assignment.deviceUUID || (d.imei !== '—' && d.imei === assignment.deviceImei));
+    setDeviceDetail(
+      dev || { name: assignment.deviceName, imei: assignment.deviceImei, model: '—', network: '—', status: '—', battery: '—' }
+    );
+  };
+
+  const openSeniorDetails = (assignment: any) => {
+    // Match the senior record by phone (assignments carry name + phone only)
+    const raw = seniorsData.find(
+      (s: any) =>
+        String(s.phoneNumber || s.phone_number || '') === assignment.seniorPhone ||
+        `${s.firstName || ''} ${s.lastName || ''}`.trim() === assignment.seniorName
+    );
+    setSeniorDetail({ name: assignment.seniorName, phone: assignment.seniorPhone, raw: raw || null });
+  };
+
+  const openAuditHistory = (assignmentId: string) => {
+    setAuditDialog({ open: true, loading: true, logs: [], error: null });
+    DeviceAssignmentService.getDeviceAssignmentAuditLogs(assignmentId)
+      .then((res) => {
+        const logs = Array.isArray(res) ? res : res?.data ?? [];
+        setAuditDialog({ open: true, loading: false, logs, error: null });
+      })
+      .catch((err) => {
+        setAuditDialog({ open: true, loading: false, logs: [], error: err?.message || 'Failed to load audit history.' });
       });
   };
 
@@ -833,10 +891,17 @@ export const Devices: React.FC = () => {
                     }}
                   >
                     <MenuItem value="" disabled>
-                      Choose a senior...
+                      {seniorsData.length === 0 ? 'No seniors found' : 'Choose a senior...'}
                     </MenuItem>
-                    <MenuItem value="Shravan Harishankar">Shravan Harishankar</MenuItem>
-                    <MenuItem value="Sushil T.">Sushil T.</MenuItem>
+                    {seniorsData.map((s: any, idx: number) => {
+                      const sid = s.id || s.userId || s.uuid || String(idx);
+                      const sname = s.name || `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Unnamed Senior';
+                      return (
+                        <MenuItem key={sid} value={sid}>
+                          {sname}{s.phoneNumber ? ` — ${s.phoneNumber}` : ''}
+                        </MenuItem>
+                      );
+                    })}
                   </Select>
                 </FormControl>
               </Box>
@@ -930,6 +995,11 @@ export const Devices: React.FC = () => {
                                 {assignment.deviceImei}
                               </Typography>
                             </Box>
+                            <Tooltip title="View device details" arrow>
+                              <IconButton size="small" onClick={() => openDeviceDetails(assignment)} sx={{ color: '#C2B8B2', '&:hover': { color: '#3B82F6' } }}>
+                                <InfoOutlinedIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
                           </Box>
                         </TableCell>
 
@@ -944,6 +1014,11 @@ export const Devices: React.FC = () => {
                                 {assignment.seniorPhone}
                               </Typography>
                             </Box>
+                            <Tooltip title="View senior details" arrow>
+                              <IconButton size="small" onClick={() => openSeniorDetails(assignment)} sx={{ color: '#C2B8B2', '&:hover': { color: '#3B82F6' } }}>
+                                <InfoOutlinedIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
                           </Box>
                         </TableCell>
 
@@ -970,6 +1045,26 @@ export const Devices: React.FC = () => {
                         {/* Actions */}
                         <TableCell sx={{ py: 1.75 }}>
                           <Box sx={{ display: 'flex', gap: 1 }}>
+                            {/* Audit History */}
+                            <Tooltip title="Audit history" arrow>
+                              <IconButton
+                                size="small"
+                                onClick={() => openAuditHistory(assignment.id)}
+                                sx={{
+                                  color: '#1A0E07',
+                                  border: '1px solid #EAE5E0',
+                                  borderRadius: '6px',
+                                  p: 0.75,
+                                  '&:hover': {
+                                    backgroundColor: '#FAF8F6',
+                                    color: '#3B82F6',
+                                    borderColor: '#3B82F6',
+                                  },
+                                }}
+                              >
+                                <HistoryIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
                             {/* Unlink / Delete Assignment */}
                             <IconButton
                               size="small"
@@ -1325,6 +1420,121 @@ export const Devices: React.FC = () => {
           >
             Register
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ─── Device Details popup ─────────────────────────────────────────── */}
+      <Dialog open={Boolean(deviceDetail)} onClose={() => setDeviceDetail(null)} maxWidth="xs" fullWidth>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 750, color: '#1A0E07', mb: 2 }}>
+            Device Details
+          </Typography>
+          {deviceDetail && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+              {[
+                ['Name', deviceDetail.name],
+                ['IMEI', deviceDetail.imei],
+                ['Model', deviceDetail.model],
+                ['Network', deviceDetail.network],
+                ['Status', deviceDetail.status],
+                ['Battery', deviceDetail.battery],
+              ].map(([label, value]) => (
+                <React.Fragment key={label}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body2" sx={{ color: '#8C7E76', fontWeight: 600 }}>{label}</Typography>
+                    <Typography variant="body2" sx={{ color: '#1A0E07', fontWeight: 700 }}>{value || '—'}</Typography>
+                  </Box>
+                  <Divider sx={{ borderColor: '#F5F2EF' }} />
+                </React.Fragment>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeviceDetail(null)} color="inherit">Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ─── Senior Details popup ─────────────────────────────────────────── */}
+      <Dialog open={Boolean(seniorDetail)} onClose={() => setSeniorDetail(null)} maxWidth="xs" fullWidth>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 750, color: '#1A0E07', mb: 2 }}>
+            Senior Details
+          </Typography>
+          {seniorDetail && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+              {[
+                ['Name', seniorDetail.name],
+                ['Phone', seniorDetail.phone],
+                ['Gender', seniorDetail.raw?.gender || (seniorDetail.raw?.isMale !== undefined ? (seniorDetail.raw.isMale ? 'Male' : 'Female') : '—')],
+                ['Date of Birth', seniorDetail.raw?.dateOfBirth ? new Date(seniorDetail.raw.dateOfBirth).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'],
+                ['Height', seniorDetail.raw?.height ? `${seniorDetail.raw.height} cm` : '—'],
+                ['Weight', seniorDetail.raw?.weight ? `${seniorDetail.raw.weight} kg` : '—'],
+              ].map(([label, value]) => (
+                <React.Fragment key={String(label)}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body2" sx={{ color: '#8C7E76', fontWeight: 600 }}>{label}</Typography>
+                    <Typography variant="body2" sx={{ color: '#1A0E07', fontWeight: 700 }}>{value || '—'}</Typography>
+                  </Box>
+                  <Divider sx={{ borderColor: '#F5F2EF' }} />
+                </React.Fragment>
+              ))}
+              {!seniorDetail.raw && (
+                <Typography variant="caption" sx={{ color: '#8C7E76', mt: 0.5 }}>
+                  Showing assignment data — full senior record was not found in the registry.
+                </Typography>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSeniorDetail(null)} color="inherit">Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ─── Audit History popup (GET /v1/devices/assignments/audit-logs/{id}) ── */}
+      <Dialog open={auditDialog.open} onClose={() => setAuditDialog((p) => ({ ...p, open: false }))} maxWidth="sm" fullWidth>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 750, color: '#1A0E07', mb: 2 }}>
+            Assignment Audit History
+          </Typography>
+          {auditDialog.loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress size={28} sx={{ color: '#D45529' }} />
+            </Box>
+          ) : auditDialog.error ? (
+            <Typography variant="body2" sx={{ color: '#DC2626' }}>{auditDialog.error}</Typography>
+          ) : auditDialog.logs.length === 0 ? (
+            <Typography variant="body2" sx={{ color: '#8C7E76' }}>No audit entries recorded for this assignment.</Typography>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              {auditDialog.logs.map((log: any, idx: number) => {
+                const rawTs = log.timestamp || log.createdAt || log.created_at;
+                const when = rawTs && !isNaN(new Date(rawTs).getTime())
+                  ? new Date(rawTs).toLocaleString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                  : '—';
+                const action = log.action || log.eventType || log.event || log.type || 'Event';
+                const actor = log.performedBy || log.actor || log.assignedBy || log.user || '';
+                const reason = log.reason || log.notes || '';
+                return (
+                  <Box key={log.id || idx} sx={{ p: 1.5, bgcolor: '#FAF8F6', borderRadius: '8px', border: '1px solid #EAE5E0' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.25 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 750, color: '#1A0E07' }}>{action}</Typography>
+                      <Typography variant="caption" sx={{ color: '#8C7E76' }}>{when}</Typography>
+                    </Box>
+                    {(actor || reason) && (
+                      <Typography variant="caption" sx={{ color: '#6E625B', display: 'block' }}>
+                        {[actor && `By: ${actor}`, reason && `Reason: ${reason}`].filter(Boolean).join(' · ')}
+                      </Typography>
+                    )}
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAuditDialog((p) => ({ ...p, open: false }))} color="inherit">Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
