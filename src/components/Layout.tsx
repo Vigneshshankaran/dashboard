@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Drawer } from '@mui/material';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
@@ -29,6 +29,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
     if (tab === 'dashboard') return 'Dashboard';
     return tab.charAt(0).toUpperCase() + tab.slice(1);
   };
+
+  // Keep the browser tab title in sync with the page being viewed
+  useEffect(() => {
+    document.title = `${getTabTitle(activeTab)} · SeniorCare`;
+  }, [activeTab]);
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#FAF8F6' }}>
