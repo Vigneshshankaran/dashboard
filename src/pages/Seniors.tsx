@@ -21,6 +21,10 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Dialog,
+  DialogContent,
+  DialogActions,
+  IconButton,
 } from '@mui/material';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import SpeedIcon from '@mui/icons-material/Speed';
@@ -37,10 +41,13 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ErrorIcon from '@mui/icons-material/Error';
 import DeviceHubIcon from '@mui/icons-material/DeviceHub';
+import AddIcon from '@mui/icons-material/Add';
+import CloseIcon from '@mui/icons-material/Close';
 
 import { FallAlertModal } from '../components/FallAlertModal';
 import { DataState } from '../components/DataState';
 import { SeniorService, DeviceAssignmentService, AlarmService, ComplianceService, AdminService, MonitorService, VitalService } from '../api';
+import { useFeedback } from '../components/FeedbackProvider';
 
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
@@ -60,8 +67,18 @@ interface SeniorsProps {
 }
 
 export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRole }) => {
+  const { notify } = useFeedback();
   const [openFallAlert, setOpenFallAlert] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState(0);
+
+  // Dialog State for Add Senior
+  const [openAddSeniorDialog, setOpenAddSeniorDialog] = useState(false);
+  const [newSeniorFirstName, setNewSeniorFirstName] = useState('');
+  const [newSeniorLastName, setNewSeniorLastName] = useState('');
+  const [newSeniorEmail, setNewSeniorEmail] = useState('');
+  const [newSeniorPhone, setNewSeniorPhone] = useState('');
+  const [newSeniorGender, setNewSeniorGender] = useState('Male');
+  const [newSeniorDob, setNewSeniorDob] = useState('');
 
   // API States
   const [selectedSenior, setSelectedSenior] = useState<any>({
@@ -449,6 +466,59 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
   };
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
+  const handleCloseAddSeniorDialog = () => {
+    setOpenAddSeniorDialog(false);
+    setNewSeniorFirstName('');
+    setNewSeniorLastName('');
+    setNewSeniorEmail('');
+    setNewSeniorPhone('');
+    setNewSeniorGender('Male');
+    setNewSeniorDob('');
+  };
+
+  const handleCreateSenior = () => {
+    if (!newSeniorFirstName.trim() || !newSeniorLastName.trim()) {
+      notify('First Name and Last Name are required.', 'error');
+      return;
+    }
+
+    const cleanedPhone = newSeniorPhone.replace(/\D/g, '');
+    const phoneNum = cleanedPhone ? parseInt(cleanedPhone, 10) : 0;
+
+    let dobTimestamp = 0;
+    if (newSeniorDob) {
+      const dateObj = new Date(newSeniorDob);
+      if (!isNaN(dateObj.getTime())) {
+        dobTimestamp = dateObj.getTime();
+      }
+    }
+
+    const payload: any = {
+      firstName: newSeniorFirstName.trim(),
+      lastName: newSeniorLastName.trim(),
+      phoneNumber: phoneNum,
+      height: 170,
+      weight: 70,
+      gender: newSeniorGender.toUpperCase(),
+      dateOfBirth: dobTimestamp,
+    };
+
+    if (newSeniorEmail.trim()) {
+      payload.email = newSeniorEmail.trim();
+    }
+
+    SeniorService.createSenior(payload)
+      .then(() => {
+        notify('Senior resident registered successfully.', 'success');
+        loadSeniors();
+        handleCloseAddSeniorDialog();
+      })
+      .catch((err: any) => {
+        console.error('Failed to create senior:', err);
+        notify(`Failed to create senior: ${err?.message || 'Unknown error'}`, 'error');
+      });
+  };
+
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setActiveSubTab(newValue);
   };
@@ -654,6 +724,27 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
                   Next
                 </Button>
               </Box>
+            )}
+            {currentUserRole === 'ADMIN' && (
+              <Button
+                variant="contained"
+                onClick={() => setOpenAddSeniorDialog(true)}
+                startIcon={<AddIcon />}
+                sx={{
+                  bgcolor: '#D45529',
+                  '&:hover': { bgcolor: '#B84520' },
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  px: 2.5,
+                  py: 1,
+                  fontSize: '0.825rem',
+                  borderRadius: '8px',
+                  boxShadow: 'none',
+                }}
+              >
+                Add Senior
+              </Button>
             )}
             <Button
               variant="contained"
@@ -1606,6 +1697,231 @@ export const Seniors: React.FC<SeniorsProps> = ({ currentUserName, currentUserRo
         }}
         respondedBy={currentUserName ? `${currentUserName}${currentUserRole ? ` (${currentUserRole})` : ''}` : undefined}
       />
+
+      {/* Dialog modal for adding new senior */}
+      <Dialog 
+        open={openAddSeniorDialog} 
+        onClose={handleCloseAddSeniorDialog}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '12px',
+              p: 1.5,
+            }
+          }
+        }}
+      >
+        {/* Custom Header with close button */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 3, pt: 1, pb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: '#1A0E07', fontSize: '1.25rem' }}>
+            Add New Senior
+          </Typography>
+          <IconButton 
+            onClick={handleCloseAddSeniorDialog} 
+            size="small" 
+            sx={{ 
+              color: '#8C7E76',
+              '&:hover': {
+                backgroundColor: 'rgba(0, 0, 0, 0.04)',
+              }
+            }}
+          >
+            <CloseIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </Box>
+
+        <DialogContent sx={{ px: 3, py: 1 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+            {/* Row 1: First Name & Last Name */}
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 750, color: '#8C7E76', letterSpacing: '0.5px' }}>
+                    FIRST NAME *
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    placeholder="Enter first name"
+                    value={newSeniorFirstName}
+                    onChange={(e) => setNewSeniorFirstName(e.target.value)}
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '8px',
+                        '& fieldset': { borderColor: '#EAE5E0' },
+                        '&:hover fieldset': { borderColor: '#D45529' },
+                        '&.Mui-focused fieldset': { borderColor: '#D45529' },
+                      }
+                    }}
+                  />
+                </Box>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 750, color: '#8C7E76', letterSpacing: '0.5px' }}>
+                    LAST NAME *
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    placeholder="Enter last name"
+                    value={newSeniorLastName}
+                    onChange={(e) => setNewSeniorLastName(e.target.value)}
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '8px',
+                        '& fieldset': { borderColor: '#EAE5E0' },
+                        '&:hover fieldset': { borderColor: '#D45529' },
+                        '&.Mui-focused fieldset': { borderColor: '#D45529' },
+                      }
+                    }}
+                  />
+                </Box>
+              </Grid>
+            </Grid>
+
+            {/* Row 2: Email & Phone */}
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 750, color: '#8C7E76', letterSpacing: '0.5px' }}>
+                    EMAIL
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    placeholder="Enter email address"
+                    value={newSeniorEmail}
+                    onChange={(e) => setNewSeniorEmail(e.target.value)}
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '8px',
+                        '& fieldset': { borderColor: '#EAE5E0' },
+                        '&:hover fieldset': { borderColor: '#D45529' },
+                        '&.Mui-focused fieldset': { borderColor: '#D45529' },
+                      }
+                    }}
+                  />
+                </Box>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 750, color: '#8C7E76', letterSpacing: '0.5px' }}>
+                    PHONE
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    placeholder="+91XXXXXXXXXX"
+                    value={newSeniorPhone}
+                    onChange={(e) => setNewSeniorPhone(e.target.value)}
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '8px',
+                        '& fieldset': { borderColor: '#EAE5E0' },
+                        '&:hover fieldset': { borderColor: '#D45529' },
+                        '&.Mui-focused fieldset': { borderColor: '#D45529' },
+                      }
+                    }}
+                  />
+                </Box>
+              </Grid>
+            </Grid>
+
+            {/* Row 3: Gender & Date of Birth */}
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 750, color: '#8C7E76', letterSpacing: '0.5px' }}>
+                    GENDER
+                  </Typography>
+                  <Select
+                    value={newSeniorGender}
+                    onChange={(e) => setNewSeniorGender(e.target.value as string)}
+                    size="small"
+                    fullWidth
+                    sx={{
+                      borderRadius: '8px',
+                      backgroundColor: '#FFFFFF',
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#EAE5E0' },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#D45529' },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#D45529' },
+                    }}
+                  >
+                    <MenuItem value="Male">Male</MenuItem>
+                    <MenuItem value="Female">Female</MenuItem>
+                    <MenuItem value="Other">Other</MenuItem>
+                  </Select>
+                </Box>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 750, color: '#8C7E76', letterSpacing: '0.5px' }}>
+                    DATE OF BIRTH
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    value={newSeniorDob}
+                    onChange={(e) => setNewSeniorDob(e.target.value)}
+                    size="small"
+                    slotProps={{
+                      inputLabel: {
+                        shrink: true,
+                      }
+                    }}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '8px',
+                        '& fieldset': { borderColor: '#EAE5E0' },
+                        '&:hover fieldset': { borderColor: '#D45529' },
+                        '&.Mui-focused fieldset': { borderColor: '#D45529' },
+                      }
+                    }}
+                  />
+                </Box>
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, pb: 3, pt: 2, gap: 1.5 }}>
+          <Button 
+            onClick={handleCloseAddSeniorDialog} 
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              color: '#8C7E76',
+              fontSize: '0.9rem',
+              '&:hover': {
+                backgroundColor: 'rgba(0, 0, 0, 0.04)',
+              }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleCreateSenior}
+            variant="contained"
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              backgroundColor: '#D45529',
+              '&:hover': {
+                backgroundColor: '#B84520',
+              },
+              fontSize: '0.9rem',
+              borderRadius: '6px',
+              px: 3,
+              boxShadow: 'none',
+            }}
+          >
+            Create Senior
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
     </DataState>
   );

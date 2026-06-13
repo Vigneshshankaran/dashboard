@@ -41,7 +41,7 @@ interface UserItem {
   email: string;
   phone: string;
   role: 'ADMIN' | 'GUARDIAN' | 'SENIOR' | 'MONITOR';
-  status: 'Active' | 'Offline';
+  status: 'Active' | 'Deactivated' | 'Inactive';
   avatarBg: string;
   avatarColor: string;
 }
@@ -119,7 +119,7 @@ export const Users: React.FC = () => {
               email: u.primaryEmail || u.email || '—',
               phone: (u.phoneNumber || u.phone_number) ? String(u.phoneNumber || u.phone_number) : '—',
               role,
-              status: u.active || u.status === 'ACTIVE' ? 'Active' : 'Offline',
+              status: u.status === 'ACTIVE' || u.active ? 'Active' : (u.status === 'DEACTIVATED' ? 'Deactivated' : 'Inactive'),
               avatarBg,
               avatarColor,
               rawUser: u,
@@ -208,7 +208,7 @@ export const Users: React.FC = () => {
 
   // Delete User handler — confirm first, surface the real server error,
   // and offer deactivation when hard-delete is refused (e.g. the user
-  // still has linked seniors, devices, or alert records).
+  // still has active session tokens or linked seniors/devices/alerts).
   const handleDeleteUser = async (user: UserItem) => {
     const ok = await confirm({
       title: `Delete ${user.name}?`,
@@ -224,9 +224,17 @@ export const Users: React.FC = () => {
       fetchUsers();
     } catch (err: any) {
       console.error('Failed to delete user in API:', err);
+      
+      const serverError = err?.message || '';
+      let explanation = 'This usually means the user still has linked records (guardian/senior mappings, devices, or alerts).';
+      
+      if (serverError.toLowerCase().includes('refresh_tokens') || serverError.toLowerCase().includes('foreign key')) {
+        explanation = 'This is because the user has active or historical login sessions (refresh tokens) in the database. Deactivation is the correct and recommended approach to disable the account while preserving system audit logs.';
+      }
+
       const deactivateInstead = await confirm({
         title: 'Delete failed',
-        message: `${err?.message || 'Unknown error from server'}\n\nThis usually means the user still has linked records (guardian/senior mappings, devices, or alerts). Deactivate the account instead?`,
+        message: `${serverError || 'Unknown error from server'}\n\n${explanation}\n\nDeactivate the account instead?`,
         confirmText: 'Deactivate',
       });
       if (!deactivateInstead) return;
@@ -238,6 +246,38 @@ export const Users: React.FC = () => {
         console.error('Failed to deactivate user in API:', err2);
         notify(`Deactivation also failed: ${err2?.message || 'Unknown error from server'}`, 'error');
       }
+    }
+  };
+
+  // Toggle Deactivate / Reactivate User
+  const handleToggleStatus = async (user: UserItem) => {
+    const isActive = user.status === 'Active';
+    const title = isActive ? `Deactivate ${user.name}?` : `Reactivate ${user.name}?`;
+    const message = isActive
+      ? 'The user will no longer be able to log in, but all historical data will be preserved.'
+      : 'The user will be allowed to log in and access the system again.';
+    const confirmText = isActive ? 'Deactivate' : 'Reactivate';
+
+    const ok = await confirm({
+      title,
+      message,
+      confirmText,
+      danger: isActive,
+    });
+    if (!ok) return;
+
+    try {
+      if (isActive) {
+        await AdminService.adminDeactivateUser(user.id);
+        notify(`${user.name} was deactivated.`, 'success');
+      } else {
+        await AdminService.adminReactivateUser(user.id);
+        notify(`${user.name} was reactivated.`, 'success');
+      }
+      fetchUsers();
+    } catch (err: any) {
+      console.error(`Failed to change user status in API:`, err);
+      notify(`Status change failed: ${err?.message || 'Unknown error from server'}`, 'error');
     }
   };
 
@@ -396,7 +436,8 @@ export const Users: React.FC = () => {
         >
           <MenuItem value="ALL">All Status</MenuItem>
           <MenuItem value="Active">Active</MenuItem>
-          <MenuItem value="Offline">Offline</MenuItem>
+          <MenuItem value="Deactivated">Deactivated</MenuItem>
+          <MenuItem value="Inactive">Inactive</MenuItem>
         </Select>
       </Box>
 
@@ -476,7 +517,13 @@ export const Users: React.FC = () => {
 
                   {/* Column 4: STATUS */}
                   <TableCell sx={{ py: 1.75 }}>
-                    <Typography sx={{ color: '#10B981', fontWeight: 700, fontSize: '0.85rem' }}>
+                    <Typography
+                      sx={{
+                        color: user.status === 'Active' ? '#10B981' : (user.status === 'Deactivated' ? '#EF4444' : '#F59E0B'),
+                        fontWeight: 700,
+                        fontSize: '0.85rem'
+                      }}
+                    >
                       {user.status}
                     </Typography>
                   </TableCell>
@@ -503,18 +550,20 @@ export const Users: React.FC = () => {
                         <EditIcon sx={{ fontSize: 16 }} />
                       </IconButton>
 
-                      {/* Lock (Black icon) */}
+                      {/* Activate/Deactivate Toggle */}
                       <IconButton
                         size="small"
+                        title={user.status === 'Active' ? 'Deactivate user' : 'Reactivate user'}
+                        onClick={() => handleToggleStatus(user)}
                         sx={{
-                          color: '#1A0E07',
+                          color: user.status === 'Active' ? '#1A0E07' : '#10B981',
                           border: '1px solid #EAE5E0',
                           borderRadius: '6px',
                           p: 0.75,
                           '&:hover': {
-                            backgroundColor: '#FAF8F6',
-                            color: '#F59E0B',
-                            borderColor: '#F59E0B',
+                            backgroundColor: user.status === 'Active' ? '#FFF7ED' : '#ECFDF5',
+                            color: user.status === 'Active' ? '#D45529' : '#10B981',
+                            borderColor: user.status === 'Active' ? '#FDBA74' : '#A7F3D0',
                           },
                         }}
                       >

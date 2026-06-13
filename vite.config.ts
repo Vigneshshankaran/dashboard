@@ -12,7 +12,8 @@ export default defineConfig({
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq, req) => {
-            proxyReq.setHeader('origin', 'https://project-ze144.vercel.app');
+            // Strip Origin header to bypass backend CORS filter restrictions (especially for PATCH method)
+            proxyReq.removeHeader('origin');
             const auth = req.headers['authorization'];
             if (auth) {
               console.log('[PROXY] Auth Header:', auth);

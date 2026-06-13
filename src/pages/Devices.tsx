@@ -59,6 +59,8 @@ interface DeviceItem {
   assignedToName: string;
   assignedToPhone: string;
   battery: string;
+  deviceType?: string;
+  deviceTypeId?: string;
 }
 
 // Assignment structure
@@ -120,8 +122,6 @@ export const Devices: React.FC = () => {
   const [newDeviceMacAddress, setNewDeviceMacAddress] = useState('');
   const [newDeviceFirmware, setNewDeviceFirmware] = useState('');
   const [newDeviceNetwork, setNewDeviceNetwork] = useState('');
-  const [newDeviceType, setNewDeviceType] = useState('');
-  const [newDeviceTypeId, setNewDeviceTypeId] = useState('');
   const [showCustomNetwork, setShowCustomNetwork] = useState(false);
 
   // Close Register Device Dialog & Reset State
@@ -135,8 +135,6 @@ export const Devices: React.FC = () => {
     setNewDeviceMacAddress('');
     setNewDeviceFirmware('');
     setNewDeviceNetwork('');
-    setNewDeviceType('');
-    setNewDeviceTypeId('');
   };
 
   // Page load / error state
@@ -176,6 +174,7 @@ export const Devices: React.FC = () => {
       .then((res) => {
         setPageLoading(false);
         if (res) {
+          console.log('API Devices raw response:', res);
           const list: DeviceItem[] = res.map((d: any) => {
             // Real API fields: id, deviceName, imei, deviceIdentifier, model,
             // networkType, status (ACTIVE/REVOKED), batteryLevel, lastSeen
@@ -199,6 +198,8 @@ export const Devices: React.FC = () => {
               assignedToName: '—',
               assignedToPhone: '—',
               battery: d.batteryLevel !== null && d.batteryLevel !== undefined ? `${d.batteryLevel}%` : '—',
+              deviceType: d.deviceType || d.type || undefined,
+              deviceTypeId: d.deviceTypeId ? String(d.deviceTypeId) : undefined,
             };
           });
           setDevices(list);
@@ -232,7 +233,7 @@ export const Devices: React.FC = () => {
               deviceImei: a.imei || a.deviceIdentifier || '—',
               seniorName: `${a.seniorFirstName || ''} ${a.seniorLastName || ''}`.trim() || '—',
               seniorPhone: a.seniorPhone ? String(a.seniorPhone) : '—',
-              status: 'ASSIGNED',
+              status: a.status || 'ASSIGNED',
               assignedAt: assignedAtStr,
             };
           });
@@ -244,23 +245,26 @@ export const Devices: React.FC = () => {
       });
   };
 
-  // Join devices with assignments by deviceId
+  // Join devices with assignments by deviceId (only match active assignments)
   const getAssignedSenior = (device: DeviceItem) =>
-    assignments.find((a) => a.deviceUUID === device.id);
+    assignments.find((a) => a.deviceUUID === device.id && a.status === 'ASSIGNED');
 
   // Register Device Handler
   const handleRegisterDevice = () => {
-    if (!newDeviceName.trim()) return;
+    if (!newDeviceImei.trim() || !newDeviceIdentifier.trim() || !newDeviceName.trim()) {
+      notify('Please fill in all required fields: IMEI, Identifier, and Name.', 'error');
+      return;
+    }
 
     const payload = {
-      deviceIdentifier: newDeviceIdentifier.trim() || newDeviceImei.trim() || String(Date.now()),
+      deviceIdentifier: newDeviceIdentifier.trim(),
       deviceName: newDeviceName.trim(),
       module: newDeviceModel.trim() || undefined,
       iccid: '',
       mac: newDeviceMacAddress.trim() || null,
       model: newDeviceModel.trim() || undefined,
-      deviceTypeId: newDeviceTypeId.trim() || '782',
-      deviceType: newDeviceType.trim(),
+      deviceTypeId: '782',
+      deviceType: 'EV07BA',
       firmwareVersion: newDeviceFirmware.trim() || undefined,
       networkType: newDeviceNetwork.trim() || '4G',
       serverTimestamp: Date.now(),
@@ -292,6 +296,7 @@ export const Devices: React.FC = () => {
       .then(() => {
         notify('Device assigned successfully.', 'success');
         fetchAssignments();
+        fetchDevices();
         setSelectedAssignDevice('');
         setSelectedAssignSenior('');
       })
@@ -361,6 +366,7 @@ export const Devices: React.FC = () => {
       .then(() => {
         notify('Device unassigned.', 'success');
         fetchAssignments();
+        fetchDevices();
       })
       .catch((err) => {
         console.error('Failed to unassign device in API:', err);
@@ -488,7 +494,9 @@ export const Devices: React.FC = () => {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => setOpenRegisterDialog(true)}
+          onClick={() => {
+            setOpenRegisterDialog(true);
+          }}
           sx={{
             px: 2.5,
             py: 1,
@@ -639,7 +647,16 @@ export const Devices: React.FC = () => {
                           {device.imei}
                         </TableCell>
                         <TableCell sx={{ color: '#8C7E76', py: 1.75 }}>
-                          {device.model}
+                          <Box>
+                            <Typography variant="body2" sx={{ color: '#1A0E07', fontWeight: 500 }}>
+                              {device.model}
+                            </Typography>
+                            {device.deviceType && (
+                              <Typography variant="caption" sx={{ color: '#8C7E76', display: 'block', fontSize: '0.75rem', mt: 0.25 }}>
+                                Type: {device.deviceType} {device.deviceTypeId ? `(ID: ${device.deviceTypeId})` : ''}
+                              </Typography>
+                            )}
+                          </Box>
                         </TableCell>
                         <TableCell sx={{ color: '#8C7E76', py: 1.75 }}>
                           {device.network}
@@ -1129,8 +1146,8 @@ export const Devices: React.FC = () => {
                             label={assignment.status}
                             size="small"
                             sx={{
-                              backgroundColor: '#ECFDF5',
-                              color: '#10B981',
+                              backgroundColor: assignment.status === 'ASSIGNED' ? '#ECFDF5' : '#FEE2E2',
+                              color: assignment.status === 'ASSIGNED' ? '#10B981' : '#EF4444',
                               fontWeight: 700,
                               fontSize: '0.7rem',
                               borderRadius: '4px',
@@ -1439,51 +1456,7 @@ export const Devices: React.FC = () => {
               )}
             </Box>
 
-            {/* Row 8: Device Type * */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Typography sx={{ width: 140, fontSize: '0.875rem', fontWeight: 600, color: '#1A0E07' }}>
-                Device Type *
-              </Typography>
-              <TextField
-                fullWidth
-                placeholder="e.g. EV07BA (exact value from backend)"
-                value={newDeviceType}
-                onChange={(e) => setNewDeviceType(e.target.value)}
-                size="small"
-                helperText="Must exactly match backend enum (case-sensitive)"
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '6px',
-                    '& fieldset': { borderColor: '#EAE5E0' },
-                    '&:hover fieldset': { borderColor: '#4F46E5' },
-                    '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
-                  }
-                }}
-              />
-            </Box>
 
-            {/* Row 9: Device Type ID */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Typography sx={{ width: 140, fontSize: '0.875rem', fontWeight: 600, color: '#1A0E07' }}>
-                Type ID
-              </Typography>
-              <TextField
-                fullWidth
-                placeholder="e.g. 782 (default: 782)"
-                value={newDeviceTypeId}
-                onChange={(e) => setNewDeviceTypeId(e.target.value)}
-                size="small"
-                helperText="Numeric device type identifier (leave blank for 782)"
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '6px',
-                    '& fieldset': { borderColor: '#EAE5E0' },
-                    '&:hover fieldset': { borderColor: '#4F46E5' },
-                    '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
-                  }
-                }}
-              />
-            </Box>
           </Box>
         </DialogContent>
 
