@@ -22,6 +22,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import CloudQueueIcon from '@mui/icons-material/CloudQueue';
+import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 
 interface SidebarProps {
   activeTab: string;
@@ -64,6 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'OPERATIONS',
       items: [
+        { id: 'command-centre', text: 'Command Centre', icon: <SupportAgentIcon /> },
         { id: 'devices', text: 'Devices', icon: <DevicesIcon /> },
         { id: 'alerts', text: 'Alerts', icon: <NotificationsIcon /> },
         { id: 'users', text: 'Users', icon: <PeopleIcon /> },

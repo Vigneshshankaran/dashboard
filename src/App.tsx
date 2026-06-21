@@ -19,6 +19,7 @@ const Guardians = lazy(() => import('./pages/Guardians'));
 const Monitors = lazy(() => import('./pages/Monitors'));
 const Alerts = lazy(() => import('./pages/Alerts'));
 const Profile = lazy(() => import('./pages/Profile'));
+const CommandCentre = lazy(() => import('./pages/CommandCentre'));
 
 interface ProfileState {
   name: string;
@@ -69,6 +70,7 @@ const AppShell: React.FC<{
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<Dashboard role={profile.role} onNavigate={goToTab} />} />
+          <Route path="/command-centre" element={<CommandCentre role={profile.role} />} />
           <Route path="/seniors" element={<Seniors currentUserName={profile.name} currentUserRole={profile.role} />} />
           <Route path="/alerts" element={<Alerts role={profile.role} />} />
           <Route path="/profile" element={<Profile profile={profile} onUpdateProfile={onUpdateProfile} />} />

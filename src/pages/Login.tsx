@@ -24,7 +24,6 @@ import LockIcon from '@mui/icons-material/Lock';
 import PhoneIcon from '@mui/icons-material/Phone';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import CloudQueueIcon from '@mui/icons-material/CloudQueue';
-import PersonIcon from '@mui/icons-material/Person';
 import CloseIcon from '@mui/icons-material/Close';
 import { AuthService, BASE_URL } from '../api';
 
@@ -59,13 +58,6 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [otp, setOtp] = useState<string>('');
   const [otpSent, setOtpSent] = useState<boolean>(false);
   const [resendCooldown, setResendCooldown] = useState<number>(0);
-
-  // Sign up form states
-  const [signupFirstName, setSignupFirstName] = useState<string>('');
-  const [signupLastName, setSignupLastName] = useState<string>('');
-  const [signupEmail, setSignupEmail] = useState<string>('');
-  const [signupPassword, setSignupPassword] = useState<string>('');
-  const [signupPhone, setSignupPhone] = useState<string>('');
 
   // Forgot Password states
   const [openForgotDialog, setOpenForgotDialog] = useState<boolean>(false);
@@ -179,42 +171,6 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     } catch (err: any) {
       console.error('Verify OTP error:', err);
       setErrorMsg(err.message || 'Invalid or expired OTP code.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Sign up handler
-  const handleSignupSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!signupFirstName || !signupLastName || !signupEmail || !signupPassword || !signupPhone) {
-      setErrorMsg('Please fill in all fields.');
-      return;
-    }
-
-    setLoading(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
-    try {
-      await AuthService.signupEmail({
-        firstName: signupFirstName.trim(),
-        lastName: signupLastName.trim(),
-        email: signupEmail.trim(),
-        password: signupPassword,
-        phoneNumber: Number(signupPhone.trim().replace(/\D/g, '')) || 0,
-      });
-      setSuccessMsg('Registration successful! You can now sign in below.');
-      setActiveTab(0); // Switch to Email login tab
-      // Clear inputs
-      setSignupFirstName('');
-      setSignupLastName('');
-      setSignupEmail('');
-      setSignupPassword('');
-      setSignupPhone('');
-    } catch (err: any) {
-      console.error('Email signup error:', err);
-      setErrorMsg(err.message || 'Registration failed. Please check your inputs.');
     } finally {
       setLoading(false);
     }
@@ -396,10 +352,10 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               Welcome back
             </Typography>
             <Typography variant="body2" sx={{ color: '#6E625B', mb: 4 }}>
-              Sign in or register to manage residents, monitors, and alerts.
+              Sign in to manage residents, monitors, and alerts.
             </Typography>
 
-            {/* Premium Selector Tabs (Email, Mobile OTP, Register) */}
+            {/* Premium Selector Tabs (Email, Mobile OTP) */}
             <Tabs
               value={activeTab}
               onChange={(_, val) => {
@@ -431,15 +387,6 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                   fontWeight: 700,
                   fontSize: '0.85rem',
                   color: activeTab === 1 ? '#D45529' : '#8C7E76',
-                  '&.Mui-selected': { color: '#D45529' },
-                }}
-              />
-              <Tab
-                label="Register"
-                sx={{
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  color: activeTab === 2 ? '#D45529' : '#8C7E76',
                   '&.Mui-selected': { color: '#D45529' },
                 }}
               />
@@ -662,120 +609,8 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               </Box>
             )}
 
-            {/* Tab 2: User Self-Registration Form */}
-            {activeTab === 2 && (
-              <form onSubmit={handleSignupSubmit} id="email-signup-form">
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-                  <Box sx={{ display: 'flex', gap: 2 }}>
-                    <TextField
-                      label="First Name"
-                      type="text"
-                      variant="outlined"
-                      fullWidth
-                      required
-                      value={signupFirstName}
-                      onChange={(e) => setSignupFirstName(e.target.value)}
-                      slotProps={{
-                        input: {
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <PersonIcon sx={{ color: '#8C7E76', fontSize: 20 }} />
-                            </InputAdornment>
-                          ),
-                        }
-                      }}
-                    />
-                    <TextField
-                      label="Last Name"
-                      type="text"
-                      variant="outlined"
-                      fullWidth
-                      required
-                      value={signupLastName}
-                      onChange={(e) => setSignupLastName(e.target.value)}
-                    />
-                  </Box>
-
-                  <TextField
-                    label="Email address"
-                    type="email"
-                    variant="outlined"
-                    fullWidth
-                    required
-                    value={signupEmail}
-                    onChange={(e) => setSignupEmail(e.target.value)}
-                    slotProps={{
-                      input: {
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <EmailIcon sx={{ color: '#8C7E76', fontSize: 20 }} />
-                          </InputAdornment>
-                        ),
-                      }
-                    }}
-                  />
-
-                  <TextField
-                    label="Phone Number"
-                    type="tel"
-                    variant="outlined"
-                    fullWidth
-                    required
-                    value={signupPhone}
-                    onChange={(e) => setSignupPhone(e.target.value)}
-                    placeholder="e.g. 1234567890"
-                    slotProps={{
-                      input: {
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <PhoneIcon sx={{ color: '#8C7E76', fontSize: 20 }} />
-                          </InputAdornment>
-                        ),
-                      }
-                    }}
-                  />
-
-                  <TextField
-                    label="Password"
-                    type="password"
-                    variant="outlined"
-                    fullWidth
-                    required
-                    value={signupPassword}
-                    onChange={(e) => setSignupPassword(e.target.value)}
-                    slotProps={{
-                      input: {
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <LockIcon sx={{ color: '#8C7E76', fontSize: 20 }} />
-                          </InputAdornment>
-                        ),
-                      }
-                    }}
-                  />
-
-                  <Button
-                    id="email-signup-button"
-                    type="submit"
-                    variant="contained"
-                    color="primary"
-                    size="large"
-                    disabled={loading}
-                    sx={{
-                      py: 1.5,
-                      fontWeight: 700,
-                      fontSize: '0.95rem',
-                    }}
-                  >
-                    {loading ? <CircularProgress size={24} color="inherit" /> : 'Register'}
-                  </Button>
-                </Box>
-              </form>
-            )}
-
             {/* Google Social OAuth Integrator */}
-            {activeTab !== 2 && (
-              <Box sx={{ mt: 3, mb: 1 }}>
+            <Box sx={{ mt: 3, mb: 1 }}>
                 <Divider sx={{ mb: 3, color: '#C2B8B2', fontSize: '0.75rem', fontWeight: 600 }}>OR</Divider>
                 <Button
                   id="google-signin-button"
@@ -800,8 +635,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                   <GoogleIconSvg />
                   Continue with Google
                 </Button>
-              </Box>
-            )}
+            </Box>
 
             {/* Bottom auxiliary options */}
             <Box

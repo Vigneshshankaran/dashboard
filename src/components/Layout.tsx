@@ -27,6 +27,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
 
   const getTabTitle = (tab: string) => {
     if (tab === 'dashboard') return 'Dashboard';
+    if (tab === 'command-centre') return 'Command Centre';
     return tab.charAt(0).toUpperCase() + tab.slice(1);
   };
 
